@@ -1,0 +1,46 @@
+[package]
+name = "multilevel-sim"
+version = "0.1.0"
+authors = [ "whooie <wcwhuie@gmail.com>",]
+edition = "2021"
+
+[dependencies]
+# ndrustfft = "*"
+anyhow = "1.0.75"
+indexmap = "2.1.0"
+itertools = "0.11.0"
+ndarray = "0.15.6"
+ndarray-npy = "0.8.1"
+num-complex = "0.4.4"
+num-traits = "0.2.17"
+rand = "0.8.5"
+regex = "1.10.2"
+rustfft = "6.1.0"
+statrs = "0.16.0"
+thiserror = "1.0.50"
+toml = "0.8.6"
+wigner-symbols = "0.5.0"
+
+[dependencies.ndarray-linalg]
+version = "0.16.0"
+features = [ "openblas-system",]
+
+[lib]
+path = "lib/lib.rs"
+name = "multilevel_sim"
+
+[[bin]]
+path = "src/rydberg_generic.rs"
+name = "rydberg_generic"
+
+[[bin]]
+path = "src/clock.rs"
+name = "clock"
+
+[[bin]]
+path = "src/clock_motion.rs"
+name = "clock_motion"
+
+[profile.release]
+lto = true
+panic = "abort"
