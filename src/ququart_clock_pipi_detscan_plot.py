@@ -5,15 +5,20 @@ from pathlib import Path
 import sys
 
 outdir = Path("output")
-infile = outdir.joinpath("clock_motion.npz")
+infile = outdir.joinpath("ququart_clock_pipi_detscan.npz")
 
 data = np.load(str(infile))
-time = data["time"]
-rho = data["rho"]
-rho_diag = rho[list(range(rho.shape[0])), list(range(rho.shape[0])), :]
+det = data["det"]
+rho = data["scanned"]
+rho_diag = rho[:, list(range(rho.shape[1])), list(range(rho.shape[1]))]
 
-atom_states = ["G0", "G1", "C0", "C1"]
-nfock = rho.shape[0] // len(atom_states)
+atom_states = [
+    "G0",
+    "G1",
+    "C0",
+    "C1",
+]
+nfock = rho.shape[1] // len(atom_states)
 
 selector_G0 = np.array([
     1.0 if a == "G0" else 0.0
@@ -36,32 +41,34 @@ selector_nbar = np.array([
     for (a, n) in product(atom_states, range(nfock))
 ])
 
-P_G0 = rho_diag.T @ selector_G0
-P_G1 = rho_diag.T @ selector_G1
-P_C0 = rho_diag.T @ selector_C0
-P_C1 = rho_diag.T @ selector_C1
-nbar = rho_diag.T @ selector_nbar
+P_G0 = rho_diag @ selector_G0
+P_G1 = rho_diag @ selector_G1
+P_C0 = rho_diag @ selector_C0
+P_C1 = rho_diag @ selector_C1
+nbar = rho_diag @ selector_nbar
 
 P = pd.Plotter()
 (
     P
-    .plot(time, P_G0.real, label="∣G0⟩")
-    .plot(time, P_G1.real, label="∣G1⟩")
-    .plot(time, P_C0.real, label="∣C0⟩")
-    .plot(time, P_C1.real, label="∣C1⟩")
+    .plot(det, P_G0.real, label="∣G0⟩")
+    .plot(det, P_G1.real, label="∣G1⟩")
+    .plot(det, P_C0.real, label="∣C0⟩")
+    .plot(det, P_C1.real, label="∣C1⟩")
     .ggrid()
     .legend(fontsize="xx-small")
-    .set_xlabel("Time [μs]")
+    .set_xlabel("Detuning [MHz]")
     .set_ylabel("Probability")
+    .savefig(outdir.joinpath("ququart_clock_pipi_detscan_probs.png"))
 )
 
 P = pd.Plotter()
 (
     P
-    .plot(time, nbar.real, color="k")
+    .plot(det, nbar.real, color="k")
     .ggrid()
-    .set_xlabel("Time [μs]")
+    .set_xlabel("Detuning [MHz]")
     .set_ylabel("$\\bar{n}$")
+    .savefig(outdir.joinpath("ququart_clock_pipi_detscan_nbar.png"))
 )
 
 pd.show()

@@ -4,6 +4,7 @@
 use std::{
     collections::HashSet,
     f64::consts::TAU,
+    rc::Rc,
 };
 // use indexmap::IndexMap;
 use itertools::Itertools;
@@ -22,7 +23,9 @@ use crate::{
         SpontaneousDecay,
         Basis,
         ProdBasis,
+        outer_prod,
     },
+    rabi::state_norm,
     spin::Spin,
 };
 
@@ -228,8 +231,8 @@ impl PolarizationParams {
 }
 
 /// Parameterization of the driving beam's power and frequency.
-#[derive(Copy, Clone, Debug, PartialEq)]
-pub enum DriveParams {
+#[derive(Clone)]
+pub enum DriveParams<'a> {
     /// Constant drive parameters.
     Constant {
         /// Drive frequency ω (radians)
@@ -242,15 +245,61 @@ pub enum DriveParams {
     /// Time-varied drive parameters.
     Variable {
         /// Drive frequency ω(t) (radians)
-        frequency: fn(f64) -> f64,
+        frequency: Rc<dyn Fn(f64) -> f64 + 'a>,
         /// Drive strength Ω(t) (radians)
-        strength: fn(f64) -> f64,
+        strength: Rc<dyn Fn(f64) -> f64 + 'a>,
         /// Phase offset φ (radians)
         phase: f64,
     },
 }
 
-impl DriveParams {
+impl<'a> std::fmt::Debug for DriveParams<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Constant { frequency, strength, phase } => {
+                write!(f,
+                    "Constant {{ \
+                    frequency: {:?}, \
+                    strength: {:?}, \
+                    phase: {:?} \
+                    }}",
+                    frequency, strength, phase,
+                )
+            },
+            Self::Variable { frequency: _, strength: _, phase } => {
+                write!(f,
+                    "Variable {{ \
+                    frequency: Rc<...>, \
+                    strength: Rc<...>, \
+                    phase: {:?} \
+                    }}",
+                    phase,
+                )
+            },
+        }
+    }
+}
+
+impl<'a> DriveParams<'a> {
+    /// Create a new `DriveParams::Constant`.
+    pub fn new_constant(frequency: f64, strength: f64, phase: f64) -> Self {
+        Self::Constant { frequency, strength, phase }
+    }
+
+    /// Create a new `DriveParams::Variable`.
+    pub fn new_variable<F1, F2>(frequency: F1, strength: F2, phase: f64)
+        -> Self
+    where
+        F1: Fn(f64) -> f64 + 'a,
+        F2: Fn(f64) -> f64 + 'a,
+    {
+        Self::Variable {
+            frequency: Rc::new(frequency),
+            strength: Rc::new(strength),
+            phase,
+        }
+    }
+
     /// Calculate the time dependence of the drive phase (integral of frequency
     /// with phase offset) and strength over an array of time coordinates.
     pub fn gen_time_dep(&self, time: &nd::Array1<f64>)
@@ -263,9 +312,9 @@ impl DriveParams {
                 (ph, W)
             },
             Self::Variable { frequency, strength, phase } => {
-                let w = time.mapv(frequency);
+                let w = time.mapv(|t| (frequency.as_ref())(t));
                 let ph = *phase + trapz_prog_nonuniform(&w, time);
-                let W = time.mapv(strength);
+                let W = time.mapv(|t| (strength.as_ref())(t));
                 (ph, W)
             },
         }
@@ -278,7 +327,7 @@ pub struct HBuilder<'a, S>
 where S: SpinState
 {
     basis: &'a Basis<S>,
-    pub drive: DriveParams,
+    pub drive: DriveParams<'a>,
     pub polarization: PolarizationParams,
 }
 
@@ -288,7 +337,7 @@ where S: SpinState
     /// Create a new `HBuilder`.
     pub fn new(
         basis: &'a Basis<S>,
-        drive: DriveParams,
+        drive: DriveParams<'a>,
         polarization: PolarizationParams,
     ) -> Self
     {
@@ -521,9 +570,13 @@ where S: SpinState + RydbergState
     }
 }
 
+/// Determines the maximum Fock state index included in the simulation.
 #[derive(Copy, Clone, Debug)]
 pub enum FockCutoff {
+    /// Set the maximum Fock state as that for which the Boltzmann distribution
+    /// crosses this threshold.
     Boltzmann(f64),
+    /// Set the maximum Fock state index explicitly.
     NMax(usize),
 }
 
@@ -551,7 +604,7 @@ where S: SpinState + TrappedMagic
 {
     atom_basis: &'a Basis<S>,
     basis: Basis<Fock<S>>,
-    pub drive: DriveParams,
+    pub drive: DriveParams<'a>,
     pub polarization: PolarizationParams,
     mass: f64,
     wavelength: f64,
@@ -573,11 +626,12 @@ where S: SpinState + TrappedMagic
 
     /// Create a new `HBuilderMagicTrap`.
     ///
-    /// The maximum Fock state included in the model will be that for which the
-    /// associated probability in a thermal distribution at `temperature` is at
-    /// or below `boltzmann_threshold` (default 10^-6). The driving wavelength
-    /// is assumed to be approximately constant over the range of possible
-    /// driving frequencies.
+    /// The maximum Fock state included in the model, if not [set
+    /// explicitly][FockCutoff::NMax], will be that for which the associated
+    /// probability in a thermal distribution at `temperature` is at or below
+    /// `boltzmann_threshold` (default 10^-6). The driving wavelength is assumed
+    /// to be approximately constant over the range of possible driving
+    /// frequencies.
     ///
     /// # Units
     /// To keep the ratio ħω/kT invariant, temperature should be provided in
@@ -594,7 +648,7 @@ where S: SpinState + TrappedMagic
     /// 10^-6 kg`).
     pub fn new(
         atom_basis: &'a Basis<S>,
-        drive: DriveParams,
+        drive: DriveParams<'a>,
         polarization: PolarizationParams,
         params: MotionalParams,
     ) -> Self
@@ -609,19 +663,14 @@ where S: SpinState + TrappedMagic
             = Self::HBAR * Self::TRAP_FREQ / (Self::KB * temperature);
         let Z: f64 = (2.0 * (x / 2.0).sinh()).recip();
         let nmax: f64
-            = match fock_cutoff {
-                Some(FockCutoff::Boltzmann(p)) => {
+            = match fock_cutoff.unwrap_or(FockCutoff::Boltzmann(1e-6)) {
+                FockCutoff::Boltzmann(p) => {
                     (-(Z * p).ln() / x - 0.5).ceil()
                 },
-                Some(FockCutoff::NMax(nmax)) => {
+                FockCutoff::NMax(nmax) => {
                     nmax as f64
                 },
-                None => {
-                    let p: f64 = 1e-6;
-                    (-(Z * p).ln() / x - 0.5).ceil()
-                },
             };
-        println!("T={:.3e} x={:.3e} Z={:.3e} nmax={:.3e}", temperature, x, Z, nmax);
         if nmax > usize::MAX as f64 {
             panic!(
                 "HBuilderMagicTrap::new: maximum Fock index overflows usize"
@@ -669,6 +718,21 @@ where S: SpinState + TrappedMagic
 
     /// Return a reference to the full Fock basis.
     pub fn basis(&self) -> &Basis<Fock<S>> { &self.basis }
+
+    /// Return the atomic mass in original units.
+    pub fn mass(&self) -> f64 { self.mass }
+
+    /// Return the laser wavelength in original units.
+    pub fn wavelength(&self) -> f64 { self.wavelength }
+
+    /// Return the atomic temperature in original units.
+    pub fn temperature(&self) -> f64 { self.temperature }
+
+    /// Return the maximum Fock state index.
+    pub fn nmax(&self) -> usize { self.nmax }
+
+    /// Return the Lamb-Dicke parameter.
+    pub fn lamb_dicke(&self) -> f64 { self.lamb_dicke }
 
     /// Generate a thermal state vector following a Boltzmann distribution over
     /// the motional states of a single atomic state.
@@ -741,6 +805,43 @@ where S: SpinState + TrappedMagic
         let N: C64 = rho.diag().iter().sum::<C64>();
         rho /= N;
         Some(rho)
+    }
+
+    /// Generate a thermal state density matrix with coherence only in the
+    /// atomic subspace. The motional subspace is taken to follow a (decohered)
+    /// Boltzmann distribution.
+    ///
+    /// **Note**: the returned matrix is renormalized such that its trace is
+    /// equal to 1; in cases where the Boltzmann distribution cutoff is not
+    /// sufficiently low, this can cause the average Fock index to disagree with
+    /// theory.
+    ///
+    /// *Panics* if the length of `atomic_state` disagrees with the size of the
+    /// atomic basis.
+    pub fn thermal_density_atomic<F>(&self, amps: F) -> nd::Array2<C64>
+    where F: Fn(&S, usize, f64) -> C64
+    {
+        let mut atom_state: nd::Array1<C64>
+            = self.atom_basis.get_vector_weighted(amps);
+        let N: C64 = state_norm(&atom_state);
+        atom_state /= N;
+        let atom_density: nd::Array2<C64>
+            = outer_prod(&atom_state, &atom_state);
+
+        let mut motional_density: nd::Array2<C64>
+            = nd::Array2::from_diag(
+                &(0..=self.nmax)
+                    .map(|n| {
+                        C64::from(
+                            (-self.x * (n as f64 + 0.5)).exp() / self.Z
+                        )
+                    })
+                    .collect::<nd::Array1<C64>>()
+            );
+        let N: C64 = motional_density.diag().iter().sum::<C64>();
+        motional_density /= N;
+
+        kron(&atom_density, &motional_density)
     }
 
     fn make_exp_ikx(&self) -> nd::Array2<C64> {
@@ -820,6 +921,87 @@ where S: SpinState + TrappedMagic
         H
     }
 }
+
+pub trait HBuild<'a, S>
+where S: BasisState
+{
+    type Params;
+
+    fn new_builder<P>(basis: &'a Basis<S>, params: P) -> Self
+    where P: Into<Self::Params>;
+
+    fn build(&self, time: &nd::Array1<f64>) -> nd::Array3<C64>;
+}
+
+#[derive(Clone, Debug)]
+pub struct HBuilderParams<'a> {
+    pub drive: DriveParams<'a>,
+    pub polarization: PolarizationParams,
+}
+
+impl<'a> From<(DriveParams<'a>, PolarizationParams)> for HBuilderParams<'a> {
+    fn from(params: (DriveParams<'a>, PolarizationParams)) -> Self {
+        let (drive, polarization) = params;
+        Self { drive, polarization }
+    }
+}
+
+impl<'a, S> HBuild<'a, S> for HBuilder<'a, S>
+where S: SpinState
+{
+    type Params = HBuilderParams<'a>;
+
+    fn new_builder<P>(basis: &'a Basis<S>, params: P) -> Self
+    where P: Into<Self::Params>
+    {
+        let HBuilderParams { drive, polarization } = params.into();
+        Self::new(basis, drive, polarization)
+    }
+
+    fn build(&self, time: &nd::Array1<f64>) -> nd::Array3<C64> {
+        self.gen(time)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct HBuilderRydbergParams<'a, I, S>
+where
+    I: IntoIterator<Item = HBuilder<'a, S>>,
+    S: SpinState + RydbergState + 'a,
+{
+    pub sites: I,
+    pub coupling: RydbergCoupling,
+}
+
+impl<'a, I, S> From<(I, RydbergCoupling)> for HBuilderRydbergParams<'a, I, S>
+where
+    I: IntoIterator<Item = HBuilder<'a, S>>,
+    S: SpinState + RydbergState + 'a,
+{
+    fn from(params: (I, RydbergCoupling)) -> Self {
+        let (sites, coupling) = params;
+        Self { sites, coupling }
+    }
+}
+
+// impl<'a, I, S> HBuild<'a, S> for HBuilderRydberg<'a, S>
+// where
+//     I: IntoIterator<Item = HBuilder<'a, S>>,
+//     S: SpinState + RydbergState + 'a,
+// {
+//     type Params = HBuilderRydbergParams<'a, I, S>;
+//
+//     fn new_builder<P>(_basis: &'a Basis<S>, params: P) -> Self
+//     where P: Into<Self::Params>
+//     {
+//         let HBuilderRydbergParams { sites, coupling } = params.into();
+//         Self::new(sites, coupling)
+//     }
+//
+//     fn build(&self, time: &nd::Array1<f64>) -> nd::Array3<C64> {
+//         self.gen(time)
+//     }
+// }
 
 /// Builder for non-Hermitian, real matrices giving spontaneous decay rates in a
 /// single-atom system.

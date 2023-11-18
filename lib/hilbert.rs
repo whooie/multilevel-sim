@@ -13,7 +13,7 @@ use crate::{
 /* States *********************************************************************/
 
 /// A single basis state.
-pub trait BasisState: Clone + PartialEq + Eq + Hash {
+pub trait BasisState: Clone + PartialEq + Eq + Hash + std::fmt::Debug {
     /// Return `true` if two states can be coupled by an electric dipole
     /// transition.
     ///

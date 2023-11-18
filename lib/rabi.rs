@@ -64,7 +64,7 @@ pub fn trace(A: &nd::Array2<C64>) -> C64 {
     A.diag().iter().copied().sum()
 }
 
-fn stack_arrays<A, D>(axis: nd::Axis, arrays: &[nd::Array<A, D>])
+pub fn stack_arrays<A, D>(axis: nd::Axis, arrays: &[nd::Array<A, D>])
     -> Result<nd::Array<A, D::Larger>, nd::ShapeError>
 where
     A: Clone,
@@ -85,7 +85,7 @@ where A: Copy + std::ops::Sub<A, Output = A>
         .collect()
 }
 
-fn state_norm(state: &nd::Array1<C64>) -> C64 {
+pub fn state_norm(state: &nd::Array1<C64>) -> C64 {
     state.iter().map(|a| *a * a.conj()).sum::<C64>().sqrt()
 }
 
@@ -228,7 +228,6 @@ pub fn schrodinger_evolve_rk4(
     let dt = array_diff(t);
     let mut psi: Vec<nd::Array1<C64>> = Vec::with_capacity(t.len());
     psi.push(psi0.clone());
-    // psi.push(psi0.clone());
     let mut psi_old: &nd::Array1<C64>;
     let mut phi1: nd::Array1<C64>;
     let mut phi2: nd::Array1<C64>;
@@ -264,7 +263,9 @@ pub fn schrodinger_evolve_rk4(
         psi.push(psi_mid);
         psi.push(psi_new);
     }
-    psi.push(psi.last().unwrap().clone());
+    if psi.len() < t.len() {
+        psi.push(psi.last().unwrap().clone());
+    }
     stack_arrays(nd::Axis(1), &psi)
         .expect("schrodinger_evolve_rk4: array stacking error")
 }
@@ -391,7 +392,9 @@ pub fn liouville_evolve_rk4(
         rho.push(rho_mid);
         rho.push(rho_new);
     }
-    rho.push(rho.last().unwrap().clone());
+    if rho.len() < t.len() {
+        rho.push(rho.last().unwrap().clone());
+    }
     stack_arrays(nd::Axis(2), &rho)
         .expect("liouville_evolve_rk4: array stacking error")
 }
@@ -525,7 +528,9 @@ pub fn lindblad_evolve_rk4(
         rho.push(rho_mid);
         rho.push(rho_new);
     }
-    rho.push(rho.last().unwrap().clone());
+    if rho.len() < t.len() {
+        rho.push(rho.last().unwrap().clone());
+    }
     stack_arrays(nd::Axis(2), &rho)
         .expect("lindblad_evolve_rk4: array stacking error")
 }

@@ -39,7 +39,7 @@ fn main() {
             basis.get_energy(&State::C1).unwrap()
             - basis.get_energy(&State::G0).unwrap()
             ,
-        strength: TAU * 25e-3,
+        strength: TAU * 0.1e-3,
         phase: 0.0,
     };
     let polarization = PolarizationParams::Poincare {
@@ -51,12 +51,12 @@ fn main() {
         mass: 1e6 * M,
         wavelength: WL,
         temperature: 1e-6 * T,
-        fock_cutoff: Some(FockCutoff::NMax(20)),
+        fock_cutoff: Some(FockCutoff::Boltzmann(1e-4)),
     };
 
     let hbuilder = HBuilderMagicTrap::new(&basis, drive, polarization, motion);
 
-    let time: nd::Array1<f64> = nd::Array1::linspace(0.0, 200.0, 1000);
+    let time: nd::Array1<f64> = nd::Array1::linspace(0.0, 20000.0, 3000);
     let H = hbuilder.gen(&time);
 
     let rho0: nd::Array2<C64>

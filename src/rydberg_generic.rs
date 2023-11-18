@@ -16,7 +16,7 @@ use multilevel_sim::{
     systems::rydberg_generic::*,
 };
 
-const N_ATOMS: usize = 2;
+const N_ATOMS: usize = 1;
 
 fn main() {
     let outdir = PathBuf::from("output");

@@ -41,6 +41,18 @@ name = "clock"
 path = "src/clock_motion.rs"
 name = "clock_motion"
 
+[[bin]]
+path = "src/ququart_cccz.rs"
+name = "ququart_cccz"
+
+[[bin]]
+path = "src/ququart_cz.rs"
+name = "ququart_cz"
+
+[[bin]]
+path = "src/ququart_clock_pipi.rs"
+name = "ququart_clock_pipi"
+
 [profile.release]
 lto = true
 panic = "abort"
