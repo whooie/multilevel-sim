@@ -136,7 +136,7 @@ pub fn outer_prod(a: &nd::Array1<C64>, b: &nd::Array1<C64>)
 ///
 /// This collection is backed by a single [`IndexMap`], which can be accessed
 /// via [`AsRef`], [`AsMut`], [`Deref`] and [`DerefMut`].
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Basis<S>
 where S: BasisState
 {
@@ -343,7 +343,7 @@ where S: BasisState
 ///
 /// This collection is backed by a single [`IndexMap`], which can be accessed
 /// via [`AsRef`], [`AsMut`], [`Deref`] and [`DerefMut`].
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ProdBasis<S>
 where S: BasisState
 {

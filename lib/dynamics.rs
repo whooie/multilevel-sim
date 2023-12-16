@@ -4,6 +4,8 @@
 use std::{
     collections::HashSet,
     f64::consts::TAU,
+    marker::PhantomData,
+    ops::{ Deref, DerefMut },
     rc::Rc,
 };
 // use indexmap::IndexMap;
@@ -844,17 +846,72 @@ where S: SpinState + TrappedMagic
         kron(&atom_density, &motional_density)
     }
 
+    fn make_x(&self) -> nd::Array2<C64> {
+        let n_x = self.nmax + 1;
+        let mut x_op: nd::Array2<C64> = nd::Array2::zeros((n_x, n_x));
+        let coeff: f64 = self.wavelength * self.lamb_dicke / TAU;
+        x_op // a
+            .slice_mut(s![..n_x - 1, 1..n_x])
+            .diag_mut()
+            .indexed_iter_mut()
+            .for_each(|(n, elem)| {
+                *elem = C64::from(coeff * (n as f64 + 1.0).sqrt());
+            });
+        x_op // a^\dagger
+            .slice_mut(s![1..n_x, ..n_x - 1])
+            .diag_mut()
+            .indexed_iter_mut()
+            .for_each(|(n, elem)| {
+                *elem = C64::from(coeff * (n as f64 + 1.0).sqrt());
+            });
+        x_op
+    }
+
+    /// Compute the *x* (position) operator over the entire atom-motion basis.
+    pub fn gen_x(&self) -> nd::Array2<C64> {
+        kron(&nd::Array2::eye(self.atom_basis.len()), &self.make_x())
+    }
+
+    fn make_p(&self) -> nd::Array2<C64> {
+        let n_p = self.nmax + 1;
+        let mut p_op: nd::Array2<C64> = nd::Array2::zeros((n_p, n_p));
+        let coeff: C64
+            = C64::i() * self.wavelength / TAU
+            * self.mass * Self::TRAP_FREQ
+            * self.lamb_dicke;
+        p_op // a
+            .slice_mut(s![..n_p - 1, 1..n_p])
+            .diag_mut()
+            .indexed_iter_mut()
+            .for_each(|(n, elem)| {
+                *elem = -coeff * (n as f64 + 1.0).sqrt();
+            });
+        p_op // a^\dagger
+            .slice_mut(s![1..n_p, ..n_p - 1])
+            .diag_mut()
+            .indexed_iter_mut()
+            .for_each(|(n, elem)| {
+                *elem =  coeff * (n as f64 + 1.0).sqrt();
+            });
+        p_op
+    }
+
+    /// Compute the *p* (momentum) operator over the entire atom-motion basis.
+    pub fn gen_p(&self) -> nd::Array2<C64> {
+        kron(&nd::Array2::eye(self.atom_basis.len()), &self.make_p())
+    }
+
     fn make_exp_ikx(&self) -> nd::Array2<C64> {
         let n_kx = self.nmax + 1;
         let mut kx_op: nd::Array2<C64> = nd::Array2::zeros((n_kx, n_kx));
-        kx_op
+        kx_op // a
             .slice_mut(s![..n_kx - 1, 1..n_kx])
             .diag_mut()
             .indexed_iter_mut()
             .for_each(|(n, elem)| {
                 *elem = C64::from(self.lamb_dicke * (n as f64 + 1.0).sqrt());
             });
-        kx_op
+        kx_op // a^\dagger
             .slice_mut(s![1..n_kx, ..n_kx - 1])
             .diag_mut()
             .indexed_iter_mut()
@@ -872,6 +929,14 @@ where S: SpinState + TrappedMagic
         V.dot(&L).dot(&U)
     }
 
+    /// Compute the <i>e<sup>ikx</sup></i> (laser phase) operator over the
+    /// entire atom-motion basis.
+    pub fn gen_eikx(&self) -> nd::Array2<C64> {
+        kron(&nd::Array2::eye(self.atom_basis.len()), &self.make_exp_ikx())
+    }
+
+    /// Compute the time-dependent Hamiltonian as a 3D array, with the last axis
+    /// corresponding to time.
     pub fn gen(&self, time: &nd::Array1<f64>) -> nd::Array3<C64> {
         let n = self.basis.len();
         let nt = time.len();
@@ -922,47 +987,55 @@ where S: SpinState + TrappedMagic
     }
 }
 
+/// Basic requirements for any Hamiltonian builder.
 pub trait HBuild<'a, S>
 where S: BasisState
 {
+    /// Initialization data type.
     type Params;
 
-    fn new_builder<P>(basis: &'a Basis<S>, params: P) -> Self
-    where P: Into<Self::Params>;
+    /// Basis type containing state energies.
+    type Basis: PartialEq;
 
+    /// Initialize `self`.
+    fn new_builder(params: Self::Params) -> Self;
+
+    /// Build the Hamiltonian array.
     fn build(&self, time: &nd::Array1<f64>) -> nd::Array3<C64>;
+
+    /// Return a reference to the basis.
+    fn get_basis(&self) -> &Self::Basis;
 }
 
+/// Initialization data for [`HBuilder`].
 #[derive(Clone, Debug)]
-pub struct HBuilderParams<'a> {
+pub struct HBuilderParams<'a, S>
+where S: SpinState
+{
+    pub basis: &'a Basis<S>,
     pub drive: DriveParams<'a>,
     pub polarization: PolarizationParams,
-}
-
-impl<'a> From<(DriveParams<'a>, PolarizationParams)> for HBuilderParams<'a> {
-    fn from(params: (DriveParams<'a>, PolarizationParams)) -> Self {
-        let (drive, polarization) = params;
-        Self { drive, polarization }
-    }
 }
 
 impl<'a, S> HBuild<'a, S> for HBuilder<'a, S>
 where S: SpinState
 {
-    type Params = HBuilderParams<'a>;
+    type Params = HBuilderParams<'a, S>;
+    type Basis = Basis<S>;
 
-    fn new_builder<P>(basis: &'a Basis<S>, params: P) -> Self
-    where P: Into<Self::Params>
-    {
-        let HBuilderParams { drive, polarization } = params.into();
+    fn new_builder(params: Self::Params) -> Self {
+        let HBuilderParams { basis, drive, polarization } = params;
         Self::new(basis, drive, polarization)
     }
 
     fn build(&self, time: &nd::Array1<f64>) -> nd::Array3<C64> {
         self.gen(time)
     }
+
+    fn get_basis(&self) -> &Self::Basis { self.basis() }
 }
 
+/// Initialization data for [`HBuilderRydberg`].
 #[derive(Clone, Debug)]
 pub struct HBuilderRydbergParams<'a, I, S>
 where
@@ -973,35 +1046,168 @@ where
     pub coupling: RydbergCoupling,
 }
 
-impl<'a, I, S> From<(I, RydbergCoupling)> for HBuilderRydbergParams<'a, I, S>
-where
-    I: IntoIterator<Item = HBuilder<'a, S>>,
-    S: SpinState + RydbergState + 'a,
+impl<'a, S> HBuild<'a, S> for HBuilderRydberg<'a, S>
+where S: SpinState + RydbergState
 {
-    fn from(params: (I, RydbergCoupling)) -> Self {
-        let (sites, coupling) = params;
-        Self { sites, coupling }
+    type Params = HBuilderRydbergParams<'a, Vec<HBuilder<'a, S>>, S>;
+    type Basis = ProdBasis<S>;
+
+    fn new_builder(params: Self::Params) -> Self {
+        let HBuilderRydbergParams { sites, coupling } = params;
+        Self::new(sites, coupling)
+    }
+
+    fn build(&self, time: &nd::Array1<f64>) -> nd::Array3<C64> {
+        self.gen(time)
+    }
+
+    fn get_basis(&self) -> &Self::Basis { self.prod_basis() }
+}
+
+/// Initialization data for [`HBuilderMagicTrap`].
+#[derive(Clone, Debug)]
+pub struct HBuilderMagicTrapParams<'a, S>
+where S: SpinState + TrappedMagic
+{
+    pub basis: &'a Basis<S>,
+    pub drive: DriveParams<'a>,
+    pub polarization: PolarizationParams,
+    pub motion: MotionalParams,
+}
+
+impl<'a, S> HBuild<'a, S> for HBuilderMagicTrap<'a, S>
+where S: SpinState + TrappedMagic
+{
+    type Params = HBuilderMagicTrapParams<'a, S>;
+    type Basis = Basis<Fock<S>>;
+
+    fn new_builder(params: Self::Params) -> Self {
+        let HBuilderMagicTrapParams { basis, drive, polarization, motion }
+            = params;
+        Self::new(basis, drive, polarization, motion)
+    }
+
+    fn build(&self, time: &nd::Array1<f64>) -> nd::Array3<C64> {
+        self.gen(time)
+    }
+
+    fn get_basis(&self) -> &Self::Basis { self.basis() }
+}
+
+/// Collection of objects implementing [`HBuild`] for easy initialization and
+/// composition of a series of Hamiltonians.
+pub struct SequenceBuilder<'a, H, S>
+where
+    H: HBuild<'a, S>,
+    S: BasisState,
+{
+    builders: Vec<H>,
+    state_lifetime: PhantomData<&'a S>,
+}
+
+impl<'a, H, S> AsRef<Vec<H>> for SequenceBuilder<'a, H, S>
+where
+    H: HBuild<'a, S>,
+    S: BasisState,
+{
+    fn as_ref(&self) -> &Vec<H> { &self.builders }
+}
+
+impl<'a, H, S> AsMut<Vec<H>> for SequenceBuilder<'a, H, S>
+where
+    H: HBuild<'a, S>,
+    S: BasisState,
+{
+    fn as_mut(&mut self) -> &mut Vec<H> { &mut self.builders }
+}
+
+impl<'a, H, S> Deref for SequenceBuilder<'a, H, S>
+where
+    H: HBuild<'a, S>,
+    S: BasisState,
+{
+    type Target = Vec<H>;
+
+    fn deref(&self) -> &Self::Target { &self.builders }
+}
+
+impl<'a, H, S> DerefMut for SequenceBuilder<'a, H, S>
+where
+    H: HBuild<'a, S>,
+    S: BasisState,
+{
+    fn deref_mut(&mut self) -> &mut Self::Target { &mut self.builders }
+}
+
+impl<'a, H, S> From<Vec<H>> for SequenceBuilder<'a, H, S>
+where
+    H: HBuild<'a, S>,
+    S: BasisState,
+{
+    fn from(builders: Vec<H>) -> Self {
+        Self { builders, state_lifetime: PhantomData }
     }
 }
 
-// impl<'a, I, S> HBuild<'a, S> for HBuilderRydberg<'a, S>
-// where
-//     I: IntoIterator<Item = HBuilder<'a, S>>,
-//     S: SpinState + RydbergState + 'a,
-// {
-//     type Params = HBuilderRydbergParams<'a, I, S>;
-//
-//     fn new_builder<P>(_basis: &'a Basis<S>, params: P) -> Self
-//     where P: Into<Self::Params>
-//     {
-//         let HBuilderRydbergParams { sites, coupling } = params.into();
-//         Self::new(sites, coupling)
-//     }
-//
-//     fn build(&self, time: &nd::Array1<f64>) -> nd::Array3<C64> {
-//         self.gen(time)
-//     }
-// }
+impl<'a, H, S> FromIterator<H::Params> for SequenceBuilder<'a, H, S>
+where
+    H: HBuild<'a, S>,
+    S: BasisState,
+{
+    fn from_iter<I>(iter: I) -> Self
+    where I: IntoIterator<Item = H::Params>
+    {
+        Self {
+            builders: iter.into_iter().map(H::new_builder).collect(),
+            state_lifetime: PhantomData,
+        }
+    }
+}
+
+impl<'a, H, S> SequenceBuilder<'a, H, S>
+where
+    H: HBuild<'a, S>,
+    S: BasisState,
+{
+    /// Return `Some(true`) if all builders' bases are equal; `None` if no
+    /// builders are present.
+    pub fn equal_bases(&self) -> Option<bool> {
+        self.builders.first()
+            .map(|b| b.get_basis())
+            .map(|comp| self.builders.iter().all(|b| b.get_basis() == comp))
+    }
+
+    /// Return `Some` if at least one builder is present and all builders' bases
+    /// are equal.
+    pub fn get_basis(&self) -> Option<&H::Basis> {
+        if let Some(true) = self.equal_bases() {
+            self.builders.first().map(|builder| builder.get_basis())
+        } else {
+            None
+        }
+    }
+
+    /// Return the basis of the `n`-th builder.
+    pub fn get_basis_at(&self, n: usize) -> Option<&H::Basis> {
+        self.builders.get(n).map(|builder| builder.get_basis())
+    }
+
+    /// Build the total hamiltonian as the sum of all builders' generated
+    /// Hamiltonians.
+    pub fn build(&self, time: &nd::Array1<f64>) -> Option<nd::Array3<C64>> {
+        self.builders.iter()
+            .fold(
+                None,
+                |acc: Option<nd::Array3<C64>>, builder: &H| {
+                    if let Some(h) = acc {
+                        Some(h + builder.build(time))
+                    } else {
+                        Some(builder.build(time))
+                    }
+                }
+            )
+    }
+}
 
 /// Builder for non-Hermitian, real matrices giving spontaneous decay rates in a
 /// single-atom system.

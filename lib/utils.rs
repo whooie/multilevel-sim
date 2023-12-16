@@ -481,7 +481,7 @@ impl_fextremum_simple!([f32], f32);
 //             k0 = k;
 //         }
 //     }
-//     (k0, y0);
+//     (k0, y0)
 // }
 //
 // pub fn find_first_min<'a, A: 'a, I>(y: I) -> (usize, A)
@@ -499,7 +499,7 @@ impl_fextremum_simple!([f32], f32);
 //             k0 = k;
 //         }
 //     }
-//     (k0, y0);
+//     (k0, y0)
 // }
 
 /// For use with [`value_str()`].
