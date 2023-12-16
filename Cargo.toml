@@ -53,6 +53,14 @@ name = "ququart_cz"
 path = "src/ququart_clock_pipi.rs"
 name = "ququart_clock_pipi"
 
+[[bin]]
+path = "src/ququart_clock_pi2pi2.rs"
+name = "ququart_clock_pi2pi2"
+
+[[bin]]
+path = "src/ququart_clock_corpse.rs"
+name = "ququart_clock_corpse"
+
 [profile.release]
 lto = true
 panic = "abort"

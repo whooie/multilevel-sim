@@ -12,6 +12,8 @@ time = data["time"]
 psi = data["psi"]
 
 atom_states = [
+    "G0",
+    "G1",
     "C0",
     "C1",
     "R0",
@@ -33,15 +35,15 @@ for (k, state) in enumerate(state_labels):
     .legend(fontsize="xx-small")
 )
 
-s0 = psi[states.index("C0,C1"), :]
-s1 = psi[states.index("C0,R3"), :]
-ph = np.log(s1 / s0).imag % (2 * np.pi)
-P = pd.Plotter()
-(
-    P
-    .plot(time[1:-2], ph[1:-2] / np.pi)
-    .savefig("output/cccz_phase.png")
-)
+# s0 = psi[states.index("C0,C1"), :]
+# s1 = psi[states.index("C0,R3"), :]
+# ph = np.log(s1 / s0).imag % (2 * np.pi)
+# P = pd.Plotter()
+# (
+#     P
+#     .plot(time[1:-2], ph[1:-2] / np.pi)
+#     .savefig("output/cccz_phase.png")
+# )
 
 pd.show()
 

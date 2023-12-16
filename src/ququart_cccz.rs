@@ -12,6 +12,8 @@ use num_complex::Complex64 as C64;
 use multilevel_sim::{
     mkdir,
     write_npz,
+    print_flush,
+    println_flush,
     hilbert::{ Basis, ProdBasis },
     dynamics::*,
     rabi::*,
@@ -41,8 +43,8 @@ fn do_pulses(
 {
     let basis: Basis<State>
         = [
-            // (G0, TAU * zm(G0, B)),
-            // (G1, TAU * zm(G1, B)),
+            (G0, TAU * zm(G0, B)),
+            (G1, TAU * zm(G1, B)),
             (C0, TAU * zm(C0, B)),
             (C1, TAU * zm(C1, B)),
             // (N0, TAU * zm(N0, B)),
@@ -109,6 +111,19 @@ fn do_pulses(
         = pulse1.prod_basis().get_vector(init_state).unwrap();
     let psi: nd::Array2<C64> = schrodinger_evolve_rk4(&psi0, &H, &time);
 
+    let nt = time.len();
+    let psi_ququart: nd::Array1<C64>
+        = pulse1.prod_basis().keys()
+        .zip(psi.slice(nd::s![.., nt - 1]))
+        .filter_map(|(ss, a)| {
+            (
+                !matches!(ss[0], R0 | R1 | R2 | R3)
+                && !matches!(ss[1], R0 | R1 | R2 | R3)
+            ).then_some(*a)
+        })
+        .collect();
+    println!("\n{:+.6}", psi_ququart);
+
     (time, psi, basis.kron_with(&basis))
 }
 
@@ -127,17 +142,165 @@ fn cz_phase(
     ph
 }
 
+#[derive(Copy, Clone, Debug)]
+struct Phases {
+    ph0000: f64,
+    ph0001: f64,
+    ph0010: f64,
+    ph0011: f64,
+    ph0100: f64,
+    ph0101: f64,
+    ph0110: f64,
+    ph0111: f64,
+    ph1000: f64,
+    ph1001: f64,
+    ph1010: f64,
+    ph1011: f64,
+    ph1100: f64,
+    ph1101: f64,
+    ph1110: f64,
+    ph1111: f64,
+}
+
+impl std::fmt::Display for Phases {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "Phases {{")?;
+        write!(f, "    ph0000: ")?;
+        self.ph0000.fmt(f)?;
+        writeln!(f)?;
+        write!(f, "    ph0001: ")?;
+        self.ph0001.fmt(f)?;
+        writeln!(f)?;
+        write!(f, "    ph0010: ")?;
+        self.ph0010.fmt(f)?;
+        writeln!(f)?;
+        write!(f, "    ph0011: ")?;
+        self.ph0011.fmt(f)?;
+        writeln!(f)?;
+        write!(f, "    ph0100: ")?;
+        self.ph0100.fmt(f)?;
+        writeln!(f)?;
+        write!(f, "    ph0101: ")?;
+        self.ph0101.fmt(f)?;
+        writeln!(f)?;
+        write!(f, "    ph0110: ")?;
+        self.ph0110.fmt(f)?;
+        writeln!(f)?;
+        write!(f, "    ph0111: ")?;
+        self.ph0111.fmt(f)?;
+        writeln!(f)?;
+        write!(f, "    ph1000: ")?;
+        self.ph1000.fmt(f)?;
+        writeln!(f)?;
+        write!(f, "    ph1001: ")?;
+        self.ph1001.fmt(f)?;
+        writeln!(f)?;
+        write!(f, "    ph1010: ")?;
+        self.ph1010.fmt(f)?;
+        writeln!(f)?;
+        write!(f, "    ph1011: ")?;
+        self.ph1011.fmt(f)?;
+        writeln!(f)?;
+        write!(f, "    ph1100: ")?;
+        self.ph1100.fmt(f)?;
+        writeln!(f)?;
+        write!(f, "    ph1101: ")?;
+        self.ph1101.fmt(f)?;
+        writeln!(f)?;
+        write!(f, "    ph1110: ")?;
+        self.ph1110.fmt(f)?;
+        writeln!(f)?;
+        write!(f, "    ph1111: ")?;
+        self.ph1111.fmt(f)?;
+        writeln!(f)?;
+        writeln!(f, "}}")?;
+        Ok(())
+    }
+}
+
+impl Phases {
+    fn as_pydataline(&self, d_over_w: f64, xi: f64) -> String {
+        format!(
+            "[ {:.3}, {:.3} * np.pi, {:+.3}, {:+.3}, {:+.3}, {:+.3}, {:+.3}, {:+.3}, {:+.3}, {:+.3}, {:+.3}, {:+.3}, {:+.3}, {:+.3}, {:+.3}, {:+.3}, {:+.3}, {:+.3} ],",
+            d_over_w,
+            xi / PI,
+            self.ph0000,
+            self.ph0001,
+            self.ph0010,
+            self.ph0011,
+            self.ph0100,
+            self.ph0101,
+            self.ph0110,
+            self.ph0111,
+            self.ph1000,
+            self.ph1001,
+            self.ph1010,
+            self.ph1011,
+            self.ph1100,
+            self.ph1101,
+            self.ph1110,
+            self.ph1111,
+        )
+    }
+}
+
 fn cz_phases(
     rabi_freq: f64,
     detuning: f64,
     phase_jump: f64,
-) -> (f64, f64, f64, f64)
+) -> Phases
 {
-    let ph00 = cz_phase(rabi_freq, detuning, phase_jump, &[C0, C0]);
-    let ph01 = cz_phase(rabi_freq, detuning, phase_jump, &[C0, C1]);
-    let ph10 = cz_phase(rabi_freq, detuning, phase_jump, &[C1, C0]);
-    let ph11 = cz_phase(rabi_freq, detuning, phase_jump, &[C1, C1]);
-    (ph00, ph01, ph10, ph11)
+    print_flush!("\r0000 ");
+    let ph0000 = cz_phase(rabi_freq, detuning, phase_jump, &[G0, G0]);
+    print_flush!("\r0001 ");
+    let ph0001 = cz_phase(rabi_freq, detuning, phase_jump, &[G0, G1]);
+    print_flush!("\r0010 ");
+    let ph0010 = cz_phase(rabi_freq, detuning, phase_jump, &[G0, C0]);
+    print_flush!("\r0011 ");
+    let ph0011 = cz_phase(rabi_freq, detuning, phase_jump, &[G0, C1]);
+    print_flush!("\r0100 ");
+    let ph0100 = cz_phase(rabi_freq, detuning, phase_jump, &[G1, G0]);
+    print_flush!("\r0101 ");
+    let ph0101 = cz_phase(rabi_freq, detuning, phase_jump, &[G1, G1]);
+    print_flush!("\r0110 ");
+    let ph0110 = cz_phase(rabi_freq, detuning, phase_jump, &[G1, C0]);
+    print_flush!("\r0111 ");
+    let ph0111 = cz_phase(rabi_freq, detuning, phase_jump, &[G1, C1]);
+    print_flush!("\r1000 ");
+    let ph1000 = cz_phase(rabi_freq, detuning, phase_jump, &[C0, G0]);
+    print_flush!("\r1001 ");
+    let ph1001 = cz_phase(rabi_freq, detuning, phase_jump, &[C0, G1]);
+    print_flush!("\r1010 ");
+    let ph1010 = cz_phase(rabi_freq, detuning, phase_jump, &[C0, C0]);
+    print_flush!("\r1011 ");
+    let ph1011 = cz_phase(rabi_freq, detuning, phase_jump, &[C0, C1]);
+    print_flush!("\r1100 ");
+    let ph1100 = cz_phase(rabi_freq, detuning, phase_jump, &[C1, G0]);
+    print_flush!("\r1101 ");
+    let ph1101 = cz_phase(rabi_freq, detuning, phase_jump, &[C1, G1]);
+    print_flush!("\r1110 ");
+    let ph1110 = cz_phase(rabi_freq, detuning, phase_jump, &[C1, C0]);
+    print_flush!("\r1111 ");
+    let ph1111 = cz_phase(rabi_freq, detuning, phase_jump, &[C1, C1]);
+    println_flush!("");
+    Phases {
+        ph0000,
+        ph0001,
+        ph0010,
+        ph0011,
+        ph0100,
+        ph0101,
+        ph0110,
+        ph0111,
+        ph1000,
+        ph1001,
+        ph1010,
+        ph1011,
+        ph1100,
+        ph1101,
+        ph1110,
+        ph1111,
+    }
 }
 
 fn main() {
@@ -145,45 +308,21 @@ fn main() {
     mkdir!(outdir);
 
     const RABI: f64 = OMEGA;
-    const DET: f64 = 0.75 * OMEGA;
-    const XI: f64 = 0.708 * PI;
+    const DET: f64 = 0.362 * OMEGA;
+    const XI: f64 = 0.764 * PI;
 
-    let (time, psi, _) = do_pulses(RABI, DET, XI, &[C0, C1]);
-    write_npz!(
-        outdir.join("ququart_cccz.npz"),
-        arrays: {
-            "time" => &time,
-            "psi" => &psi,
-        }
-    );
-
-    let (ph00, ph01, ph10, ph11) = cz_phases(RABI, DET, XI);
-    println!(
-        "φ00 = {:.6}\nφ01 = {:.6}\nφ10 = {:.6}\nφ11 = {:.6}",
-        ph00, ph01, ph10, ph11,
-    );
-    println!("2 φ01 - π = {:.6}", 2.0 * ph01 - PI);
-    println!("error = {:.6}", 2.0 * ph01 - PI - ph11);
-
-    // let detuning: nd::Array1<f64> = nd::Array1::linspace(0.0, 0.5 * OMEGA, 50);
-    // let (ph00, ph01, ph10, ph11): (Vec<f64>, Vec<f64>, Vec<f64>, Vec<f64>)
-    //     = detuning.iter()
-    //     .map(|det| cz_phases(OMEGA, *det))
-    //     .multiunzip();
-    // let ph00 = nd::Array1::from(ph00);
-    // let ph01 = nd::Array1::from(ph01);
-    // let ph10 = nd::Array1::from(ph10);
-    // let ph11 = nd::Array1::from(ph11);
+    // let (time, psi, _) = do_pulses(RABI, DET, XI, &[C0, C1]);
     // write_npz!(
-    //     outdir.join("ququart_cccz_phases.npz"),
+    //     outdir.join("ququart_cccz.npz"),
     //     arrays: {
-    //         "det" => &detuning,
-    //         "ph00" => &ph00,
-    //         "ph01" => &ph01,
-    //         "ph10" => &ph10,
-    //         "ph11" => &ph11,
+    //         "time" => &time,
+    //         "psi" => &psi,
     //     }
     // );
+
+    let phases = cz_phases(RABI, DET, XI);
+    println!("{:+.6}", phases);
+    // println!("{}", phases.as_pydataline(DET / RABI, XI));
 
     println!("done");
 }

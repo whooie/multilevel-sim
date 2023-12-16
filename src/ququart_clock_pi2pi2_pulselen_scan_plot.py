@@ -5,11 +5,11 @@ from pathlib import Path
 import sys
 
 outdir = Path("output")
-infile = outdir.joinpath("ququart_clock_pipi_det2scan.npz")
+infile = outdir.joinpath("ququart_clock_pi2pi2_pulselen_scan.npz")
 
 data = np.load(str(infile))
-det1 = data["det1"]
-det2 = data["det2"]
+t0 = data["t0"]
+t1 = data["t1"]
 rho = data["scanned"]
 print(rho.shape)
 rho_diag = rho[:, :, list(range(rho.shape[2])), list(range(rho.shape[3]))]
@@ -61,69 +61,76 @@ nbar = np.array([
 
 (
     pd.Plotter()
-    .colorplot(det1, det2, P_G0.real)
+    .colorplot(t0, t1, P_G0.real.T)
     .colorbar()
     .ggrid().grid(False, which="both")
     .set_title("∣G0⟩")
-    .set_xlabel("Detuning 1 [MHz]")
-    .set_ylabel("Detuning 2 [MHz]")
+    .set_xlabel("Pulse 0 length [μs]")
+    .set_ylabel("Pulse 1 length [μs]")
     .set_clabel("Probability")
 )
 
 (
     pd.Plotter()
-    .colorplot(det1, det2, P_G1.real)
+    .colorplot(t0, t1, P_G1.real.T)
     .colorbar()
     .ggrid().grid(False, which="both")
     .set_title("∣G1⟩")
-    .set_xlabel("Detuning 1 [MHz]")
-    .set_ylabel("Detuning 2 [MHz]")
+    .set_xlabel("Pulse 0 length [μs]")
+    .set_ylabel("Pulse 1 length [μs]")
     .set_clabel("Probability")
 )
 
 (
     pd.Plotter()
-    .colorplot(det1, det2, P_C0.real)
+    .colorplot(t0, t1, P_C0.real.T)
     .colorbar()
     .ggrid().grid(False, which="both")
     .set_title("∣C0⟩")
-    .set_xlabel("Detuning 1 [MHz]")
-    .set_ylabel("Detuning 2 [MHz]")
+    .set_xlabel("Pulse 0 length [μs]")
+    .set_ylabel("Pulse 1 length [μs]")
     .set_clabel("Probability")
 )
 
 (
     pd.Plotter()
-    .colorplot(det1, det2, P_C1.real)
+    .colorplot(t0, t1, P_C1.real.T)
     .colorbar()
     .ggrid().grid(False, which="both")
     .set_title("∣C1⟩")
-    .set_xlabel("Detuning 1 [MHz]")
-    .set_ylabel("Detuning 2 [MHz]")
+    .set_xlabel("Pulse 0 length [μs]")
+    .set_ylabel("Pulse 1 length [μs]")
     .set_clabel("Probability")
 )
 
 i0, j0 = np.unravel_index((P_C0.real * P_C1.real).argmax(), P_C0.shape)
+print(
+f"""
+t0 = {t0[i0]:.6f}
+t1 = {t1[j0]:.6f}
+P_clock = {(P_C0[i0, j0] + P_C1[i0, j0]).real:.6f}
+"""[1:-1]
+)
 (
     pd.Plotter()
-    .colorplot(det1, det2, (P_C0.real * P_C1.real) / 0.25)
+    .colorplot(t0, t1, (P_C0.real * P_C1.real).T / 0.25)
     .colorbar()
-    .plot([det1[j0]], [det2[i0]], marker="o", color="w")
+    .plot([t0[i0]], [t1[j0]], marker="o", color="w")
     .ggrid().grid(False, which="both")
     .set_title("$P_{|C_0\\rangle} \\times P_{|C_1\\rangle} / 0.25$")
-    .set_xlabel("Detuning 1 [MHz]")
-    .set_ylabel("Detuning 2 [MHz]")
+    .set_xlabel("Pulse 0 length [μs]")
+    .set_ylabel("Pulse 1 length [μs]")
     .set_clabel("Probability")
-    .savefig(outdir.joinpath("ququart_clock_pipi_det2scan_c0c1.png"))
+    .savefig(outdir.joinpath("ququart_clock_pi2pi2_pulselen_scan_c0c1.png"))
 )
 
 (
     pd.Plotter()
-    .colorplot(det1, det2, nbar.real)
+    .colorplot(t0, t1, nbar.real.T)
     .colorbar()
     .ggrid().grid(False, which="both")
-    .set_xlabel("Detuning 1 [MHz]")
-    .set_ylabel("Detuning 2 [MHz]")
+    .set_xlabel("Pulse 0 length [μs]")
+    .set_ylabel("Pulse 1 length [μs]")
     .set_clabel("$\\bar{n}$")
 )
 

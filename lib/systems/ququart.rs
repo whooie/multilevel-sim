@@ -19,8 +19,45 @@ pub const MU_N: f64 = MU_B * G_3P1_F12;
 pub const MU_T: f64 = MU_B * G_3D1_F12;
 pub const MU_R: f64 = MU_B * G_3S1_F32;
 
-pub const C6_NOMINAL: f64 = 300000.0; // MHz μm^6
-pub const R0R0: f64 = -0.988723 * C6_NOMINAL;
+// pub const C6_NOMINAL: f64 = 5_000_000.0 / 0.988723; // MHz μm^6
+
+// pub const R0R0: f64 = -0.988723 * C6_NOMINAL; // calculated
+// pub const R0R1: f64 = -0.979977 * C6_NOMINAL;
+// pub const R0R2: f64 = -0.983736 * C6_NOMINAL;
+// pub const R0R3: f64 = -1.000000 * C6_NOMINAL;
+// pub const R1R1: f64 = -0.969186 * C6_NOMINAL;
+// pub const R1R2: f64 = -0.970439 * C6_NOMINAL;
+// pub const R1R3: f64 = -0.983736 * C6_NOMINAL;
+// pub const R2R2: f64 = -0.969186 * C6_NOMINAL;
+// pub const R2R3: f64 = -0.979977 * C6_NOMINAL;
+// pub const R3R3: f64 = -0.988723 * C6_NOMINAL;
+
+pub const C6_NOMINAL: f64 = 5_000_000.0; // MHz μm^6
+
+// pub const ETA: f64 = 0.000010000; // logspace(-5.0, 0.0, 21)
+// pub const ETA: f64 = 0.000017783;
+// pub const ETA: f64 = 0.000031623;
+pub const ETA: f64 = 0.000056234;
+// pub const ETA: f64 = 0.000100000;
+// pub const ETA: f64 = 0.000177828;
+// pub const ETA: f64 = 0.000316228;
+// pub const ETA: f64 = 0.000562341;
+// pub const ETA: f64 = 0.001000000;
+// pub const ETA: f64 = 0.001778279;
+// pub const ETA: f64 = 0.003162278;
+// pub const ETA: f64 = 0.005623413;
+// pub const ETA: f64 = 0.010000000;
+// pub const ETA: f64 = 0.017782794;
+// pub const ETA: f64 = 0.031622777;
+// pub const ETA: f64 = 0.056234133;
+// pub const ETA: f64 = 0.100000000;
+// pub const ETA: f64 = 0.177827941;
+// pub const ETA: f64 = 0.316227766;
+// pub const ETA: f64 = 0.562341325;
+// pub const ETA: f64 = 1.000000000;
+
+pub const ZETA: f64 = 1.0 - ETA;
+pub const R0R0: f64 = (-1.000000 + ZETA) * C6_NOMINAL; // test
 pub const R0R1: f64 = -0.979977 * C6_NOMINAL;
 pub const R0R2: f64 = -0.983736 * C6_NOMINAL;
 pub const R0R3: f64 = -1.000000 * C6_NOMINAL;
@@ -29,10 +66,21 @@ pub const R1R2: f64 = -0.970439 * C6_NOMINAL;
 pub const R1R3: f64 = -0.983736 * C6_NOMINAL;
 pub const R2R2: f64 = -0.969186 * C6_NOMINAL;
 pub const R2R3: f64 = -0.979977 * C6_NOMINAL;
-pub const R3R3: f64 = -0.988723 * C6_NOMINAL;
-pub const R_SEP: f64 = 3.5; // μm
+pub const R3R3: f64 = (-1.000000 + ZETA) * C6_NOMINAL;
+
+// pub const R_SEP: f64 = 2.4; // μm; Jeff's value
+// pub const R_SEP: f64 = 6.25; // μm
+// pub const R_SEP: f64 = 12.0; // μm
+
+pub const R_SEP: f64 = 2.35033095; // μm; U = logspace(log10(30000), log10(50), 5)
+// pub const R_SEP: f64 = 2.40000000; // μm
+// pub const R_SEP: f64 = 3.06821169; // μm
+// pub const R_SEP: f64 = 4.00536061; // μm
+// pub const R_SEP: f64 = 5.22875057; // μm
+// pub const R_SEP: f64 = 6.82581050; // μm
 
 pub const TRAP_FREQ: f64 = 10e-3; // MHz
+// pub const TRAP_FREQ: f64 = 9.5e-3; // MHz; Kaufman omg paper
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum State {
@@ -55,10 +103,10 @@ impl BasisState for State {
     fn couples_to(&self, other: &Self) -> bool {
         matches!(
             (*self, *other),
-            (G0, C0) | (C0, G0) // 3P0 couplings
-            | (G0, C1) | (C1, G0)
-            | (G1, C0) | (C0, G1)
-            | (G1, C1) | (C1, G1)
+            // (G0, C0) | (C0, G0) // 3P0 couplings
+            // | (G0, C1) | (C1, G0)
+            // | (G1, C0) | (C0, G1)
+            // | (G1, C1) | (C1, G1)
             | (G0, N0) | (N0, G0) // 3P1 couplings
             | (G0, N1) | (N1, G0)
             | (G1, N0) | (N0, G1)

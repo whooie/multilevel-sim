@@ -29,7 +29,7 @@ const POL_THETA: f64 = PI / 2.0; // perpendicular to B-field
 const POL_FACTOR: f64 = OVER_RT2;
 const RYD_CG: f64 = OVER_RT2;
 
-const OMEGA: f64 = 1.0; // MHz
+const OMEGA: f64 = 0.63; // MHz
 // const DETUNING: f64 = 0.377 * OMEGA; // MHz
 // const DETUNING: f64 = 0.47 * OMEGA; // MHz
 // const PHASE_JUMP: f64 = PI * 0.758;
@@ -140,7 +140,7 @@ fn do_pulses(
         rydcoupling,
     );
     let time: nd::Array1<f64>
-        = nd::Array1::linspace(0.0, 2.0 * pulse_len, 3000);
+        = nd::Array1::linspace(0.0, 2.0 * pulse_len, 6500);
     let H: nd::Array3<C64>
         = pulse11.gen(&time) + pulse12.gen(&time)
         + pulse21.gen(&time) + pulse22.gen(&time);
@@ -148,6 +148,19 @@ fn do_pulses(
     let psi0: nd::Array1<C64>
         = pulse11.prod_basis().get_vector(init_state).unwrap();
     let psi: nd::Array2<C64> = schrodinger_evolve_rk4(&psi0, &H, &time);
+
+    let nt = time.len();
+    let psi_ququart: nd::Array1<C64>
+        = pulse11.prod_basis().keys()
+        .zip(psi.slice(nd::s![.., nt - 1]))
+        .filter_map(|(ss, a)| {
+            (
+                !matches!(ss[0], R0 | R1 | R2 | R3)
+                && !matches!(ss[1], R0 | R1 | R2 | R3)
+            ).then_some(*a)
+        })
+        .collect();
+    println!("\n{:+.6},", psi_ququart);
 
     (time, psi, basis.kron_with(&basis))
 }
@@ -267,6 +280,19 @@ impl Phases {
             self.ph1111,
         )
     }
+
+    // + -> detuning is > optimum
+    // - -> detuning is < optimum
+    fn error(&self) -> f64 {
+        let ph01: f64
+            = (
+                self.ph0010 + self.ph0011 + self.ph0110 + self.ph0111
+                + self.ph1000 + self.ph1001 + self.ph1100 + self.ph1101
+            ) / 8.0;
+        let ph11: f64
+            = (self.ph1010 + self.ph1011 + self.ph1110 + self.ph1111) / 4.0;
+        2.0 * ph01 - PI - ph11
+    }
 }
 
 fn cz_phases(
@@ -275,6 +301,7 @@ fn cz_phases(
     phase_jump: f64,
 ) -> Phases
 {
+    println_flush!("");
     print_flush!("\r0000 ");
     let ph0000 = cz_phase(rabi_freq, detuning, phase_jump, &[G0, G0]);
     print_flush!("\r0001 ");
@@ -333,38 +360,54 @@ fn main() {
     mkdir!(outdir);
 
     const RABI: f64 = OMEGA;
-    // const DET: f64 = 0.05 * OMEGA;
-    // const XI: f64 = 0.960 * PI;
 
-    // const DET: f64 = 0.10 * OMEGA;
-    // const XI: f64 = 0.919 * PI;
+    // const DET: f64 = 0.050 * OMEGA; const XI: f64 = 0.959 * PI;
+    // const DET: f64 = 0.075 * OMEGA; const XI: f64 = 0.938 * PI;
+    // const DET: f64 = 0.100 * OMEGA; const XI: f64 = 0.918 * PI;
+    // const DET: f64 = 0.125 * OMEGA; const XI: f64 = 0.899 * PI;
+    // const DET: f64 = 0.150 * OMEGA; const XI: f64 = 0.880 * PI;
+    // const DET: f64 = 0.175 * OMEGA; const XI: f64 = 0.863 * PI;
+    // const DET: f64 = 0.200 * OMEGA; const XI: f64 = 0.846 * PI;
+    // const DET: f64 = 0.225 * OMEGA; const XI: f64 = 0.831 * PI;
+    // const DET: f64 = 0.250 * OMEGA; const XI: f64 = 0.816 * PI;
+    // const DET: f64 = 0.275 * OMEGA; const XI: f64 = 0.802 * PI;
+    // const DET: f64 = 0.300 * OMEGA; const XI: f64 = 0.790 * PI;
+    // const DET: f64 = 0.325 * OMEGA; const XI: f64 = 0.778 * PI;
+    // const DET: f64 = 0.350 * OMEGA; const XI: f64 = 0.768 * PI;
+    // const DET: f64 = 0.375 * OMEGA; const XI: f64 = 0.758 * PI;
+    // const DET: f64 = 0.400 * OMEGA; const XI: f64 = 0.750 * PI;
+    // const DET: f64 = 0.425 * OMEGA; const XI: f64 = 0.743 * PI;
+    // const DET: f64 = 0.450 * OMEGA; const XI: f64 = 0.736 * PI;
+    // const DET: f64 = 0.475 * OMEGA; const XI: f64 = 0.730 * PI;
+    // const DET: f64 = 0.500 * OMEGA; const XI: f64 = 0.725 * PI;
 
-    // const DET: f64 = 0.15 * OMEGA;
-    // const XI: f64 = 0.881 * PI;
+    // // optimal, r_sep = 6.25 μm
+    // const DET: f64 = 0.363 * OMEGA;
+    // const XI: f64 = 0.763 * PI;
 
-    // const DET: f64 = 0.20 * OMEGA;
-    // const XI: f64 = 0.847 * PI;
+    // optimal, r_sep = 2.35033095 μm
+    const DET: f64 = 0.3775 * OMEGA;
+    const XI: f64 = 0.7576 * PI;
 
-    // const DET: f64 = 0.25 * OMEGA;
-    // const XI: f64 = 0.817 * PI;
+    // // optimal, r_sep = 2.4 μm
+    // const DET: f64 = 0.3767 * OMEGA;
+    // const XI: f64 = 0.7577 * PI;
 
-    // const DET: f64 = 0.30 * OMEGA;
-    // const XI: f64 = 0.791 * PI;
+    // // optimal, r_sep = 3.06821169 μm
+    // const DET: f64 = 0.3761 * OMEGA;
+    // const XI: f64 = 0.7578 * PI;
 
-    // const DET: f64 = 0.35 * OMEGA;
-    // const XI: f64 = 0.768 * PI;
+    // // optimal, r_sep = 4.00536061 μm
+    // const DET: f64 = 0.3764 * OMEGA;
+    // const XI: f64 = 0.7578 * PI;
 
-    const DET: f64 = 0.365 * OMEGA;
-    const XI: f64 = 0.763 * PI;
+    // // optimal, r_sep = 5.22875057 μm
+    // const DET: f64 = 0.3723 * OMEGA;
+    // const XI: f64 = 0.7598 * PI;
 
-    // const DET: f64 = 0.40 * OMEGA;
-    // const XI: f64 = 0.750 * PI;
-
-    // const DET: f64 = 0.45 * OMEGA;
-    // const XI: f64 = 0.737 * PI;
-
-    // const DET: f64 = 0.50 * OMEGA;
-    // const XI: f64 = 0.725 * PI;
+    // // optimal, r_sep = 6.82581050 μm
+    // const DET: f64 = 0.3526 * OMEGA;
+    // const XI: f64 = 0.7668 * PI;
 
     let (time, psi, _) = do_pulses(RABI, DET, XI, &[G0, C0]);
     write_npz!(
@@ -378,6 +421,7 @@ fn main() {
     let phases = cz_phases(RABI, DET, XI);
     println!("{:+.6}", phases);
     // println!("{}", phases.as_pydataline(DET / RABI, XI));
+    println!("{}", phases.error());
 
     println!("done");
 }
