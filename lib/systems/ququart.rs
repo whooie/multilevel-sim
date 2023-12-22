@@ -37,7 +37,7 @@ pub const C6_NOMINAL: f64 = 5_000_000.0; // MHz μm^6
 // pub const ETA: f64 = 0.000010000; // logspace(-5.0, 0.0, 21)
 // pub const ETA: f64 = 0.000017783;
 // pub const ETA: f64 = 0.000031623;
-pub const ETA: f64 = 0.000056234;
+// pub const ETA: f64 = 0.000056234;
 // pub const ETA: f64 = 0.000100000;
 // pub const ETA: f64 = 0.000177828;
 // pub const ETA: f64 = 0.000316228;
@@ -54,7 +54,7 @@ pub const ETA: f64 = 0.000056234;
 // pub const ETA: f64 = 0.177827941;
 // pub const ETA: f64 = 0.316227766;
 // pub const ETA: f64 = 0.562341325;
-// pub const ETA: f64 = 1.000000000;
+pub const ETA: f64 = 1.000000000;
 
 pub const ZETA: f64 = 1.0 - ETA;
 pub const R0R0: f64 = (-1.000000 + ZETA) * C6_NOMINAL; // test
@@ -72,10 +72,9 @@ pub const R3R3: f64 = (-1.000000 + ZETA) * C6_NOMINAL;
 // pub const R_SEP: f64 = 6.25; // μm
 // pub const R_SEP: f64 = 12.0; // μm
 
-pub const R_SEP: f64 = 2.35033095; // μm; U = logspace(log10(30000), log10(50), 5)
-// pub const R_SEP: f64 = 2.40000000; // μm
+// pub const R_SEP: f64 = 2.35033095; // μm; U = logspace(log10(30000), log10(50), 5)
 // pub const R_SEP: f64 = 3.06821169; // μm
-// pub const R_SEP: f64 = 4.00536061; // μm
+pub const R_SEP: f64 = 4.00536061; // μm
 // pub const R_SEP: f64 = 5.22875057; // μm
 // pub const R_SEP: f64 = 6.82581050; // μm
 
