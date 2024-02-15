@@ -384,7 +384,7 @@ where S: SpinState
             drive
                 = ph1.iter().zip(ph2).zip(&drive_phase).zip(&drive_strength)
                 .map(|(((ph1k, ph2k), phk), Wk)| {
-                    *Wk * drive_weight
+                    *Wk * 0.5 * drive_weight
                         * (C64::i() * (*phk - (*ph2k - *ph1k))).exp()
                 })
                 .collect();
@@ -973,7 +973,7 @@ where S: SpinState + TrappedMagic
             drive
                 = ph1.iter().zip(ph2).zip(&drive_phase).zip(&drive_strength)
                 .map(|(((ph1k, ph2k), phk), Wk)| {
-                    *Wk * drive_weight * eikx_weight
+                    *Wk * 0.5 * drive_weight * eikx_weight
                         * (C64::i() * (*phk - (*ph2k - *ph1k))).exp()
                 })
                 .collect();

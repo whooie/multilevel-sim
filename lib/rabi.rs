@@ -36,14 +36,21 @@ where
 }
 
 /// Compute the non-Hermitian part of the RHS of the Lindblad master equation.
-pub fn lindbladian(Y: &nd::Array2<f64>, rho: &nd::Array2<C64>)
-    -> nd::Array2<C64>
+///
+/// Assumes `Y` and `rho` are both square.
+pub fn lindbladian<SA, SB>(
+    Y: &nd::ArrayBase<SA, nd::Ix2>,
+    rho: &nd::ArrayBase<SB, nd::Ix2>,
+) -> nd::Array2<C64>
+where
+    SA: nd::Data<Elem = f64>,
+    SB: nd::Data<Elem = C64>,
 {
     let n: usize = Y.shape()[0];
     let mut L: nd::Array2<C64> = nd::Array2::zeros(Y.raw_dim());
     let mut M: nd::Array2<C64>;
     for ((a, b), &y) in Y.indexed_iter() {
-        if y <= f64::EPSILON { continue; }
+        if y.abs() <= f64::EPSILON { continue; }
         M = nd::Array2::from_shape_fn(
             (n, n),
             |(i, j)| {
@@ -58,6 +65,30 @@ pub fn lindbladian(Y: &nd::Array2<f64>, rho: &nd::Array2<C64>)
     }
     L
 }
+
+// /// Compute the non-Hermitian part of the RHS of the Lindblad master equation.
+// pub fn lindbladian(Y: &nd::Array2<f64>, rho: &nd::Array2<C64>)
+//     -> nd::Array2<C64>
+// {
+//     let n: usize = Y.shape()[0];
+//     let mut L: nd::Array2<C64> = nd::Array2::zeros(Y.raw_dim());
+//     let mut M: nd::Array2<C64>;
+//     for ((a, b), &y) in Y.indexed_iter() {
+//         if y <= f64::EPSILON { continue; }
+//         M = nd::Array2::from_shape_fn(
+//             (n, n),
+//             |(i, j)| {
+//                 y * (
+//                     if i == a && j == a { rho[[b, b]] } else { C64::zero() }
+//                     - if i == b { rho[[i, j]] / 2.0 } else { C64::zero() }
+//                     - if j == b { rho[[i, j]] / 2.0 } else { C64::zero() }
+//                 )
+//             }
+//         );
+//         L += &M;
+//     }
+//     L
+// }
 
 /// Compute the trace of a square matrix `A`.
 pub fn trace(A: &nd::Array2<C64>) -> C64 {
@@ -104,12 +135,15 @@ pub fn eigen_evolve(
         .expect("eigen_evolve: diagonalization error");
     let c: nd::Array1<C64> = V.solve(psi0)
         .expect("eigen_evolve: linalg solve error");
-    let psi: Vec<nd::Array1<C64>>
+    let mut psi: nd::Array2<C64> = nd::Array::zeros((psi0.len(), t.len()));
+    let iter
         = t.iter()
-        .map(|tk| V.dot(&(&c * E.mapv(|e| (-C64::i() * e * tk).exp()))))
-        .collect();
-    stack_arrays(nd::Axis(1), &psi)
-        .expect("eigen_evolve: array stacking error")
+        .zip(psi.axis_iter_mut(nd::Axis(1)));
+    for (&tk, psik) in iter {
+        V.dot(&(&c * &E.mapv(|e| (-C64::i() * e * tk).exp())))
+            .move_into(psik);
+    }
+    psi
 }
 
 /// Compute the Schrödinger coherent evolution of the initial state `psi0` for
@@ -126,19 +160,22 @@ pub fn eigen_evolve_t(
     let dt = array_diff(t);
     let mut EV: (nd::Array1<f64>, nd::Array2<C64>);
     let mut c: nd::Array1<C64>;
-    let mut psi: Vec<nd::Array1<C64>> = Vec::with_capacity(t.len());
-    psi.push(psi0.clone());
-    let mut psi_new: nd::Array1<C64>;
-    for (dtk, Hk) in dt.into_iter().zip(H.axis_iter(nd::Axis(2))) {
+    let mut psi: nd::Array2<C64> = nd::Array::zeros((psi0.len(), t.len()));
+    // let mut psi_new: nd::Array1<C64>;
+    psi.slice_mut(s![.., 0]).assign(psi0);
+    let iter
+        = dt.into_iter()
+        .zip(H.axis_iter(nd::Axis(2)))
+        .enumerate();
+    for (k, (dtk, Hk)) in iter {
         EV = Hk.eigh(la::UPLO::Lower)
             .expect("eigen_evolve_t: diagonalization error");
-        c = EV.1.solve(psi.last().unwrap())
+        c = EV.1.solve(&psi.slice(s![.., k]))
             .expect("eigen_evolve_t: linalg solve error");
-        psi_new = EV.1.dot(&(c * EV.0.mapv(|e| (-C64::i() * e * dtk).exp())));
-        psi.push(psi_new);
+        EV.1.dot(&(&c * EV.0.mapv(|e| (-C64::i() * e * dtk).exp())))
+            .move_into(psi.slice_mut(s![.., k + 1]));
     }
-    stack_arrays(nd::Axis(1), &psi)
-        .expect("eigen_evolve_t: array stacking error")
+    psi
 }
 
 /// Numerically integrate the Schrödinger equation using the midpoint rule.
@@ -151,29 +188,23 @@ pub fn schrodinger_evolve(
 ) -> nd::Array2<C64>
 {
     let dt = array_diff(t);
-    let mut psi: Vec<nd::Array1<C64>> = Vec::with_capacity(t.len());
-    psi.push(psi0.clone());
-    psi.push(psi0.clone());
-    let mut len: usize = 2;
-    let mut psi_old: &nd::Array1<C64>;
-    let mut psi_cur: &nd::Array1<C64>;
+    let mut psi: nd::Array2<C64> = nd::Array::zeros((psi0.len(), t.len()));
     let mut dpsi: nd::Array1<C64>;
     let mut psi_new: nd::Array1<C64>;
     let mut N: C64;
+    psi.slice_mut(s![.., 0]).assign(psi0);
+    psi.slice_mut(s![.., 1]).assign(psi0);
     let iter
         = dt.iter()
-        .zip(dt.iter().skip(1));
-    for (&dtk, &dtkp1) in iter {
-        psi_old = psi.get(len - 2).unwrap();
-        psi_cur = psi.last().unwrap();
-        dpsi = (-(dtk + dtkp1) * C64::i()) * H.dot(psi_cur);
-        psi_new = psi_old + dpsi;
-        N = state_norm(&psi_new);
-        psi.push(psi_new / N);
-        len += 1;
+        .zip(dt.iter().skip(1))
+        .enumerate();
+    for (k, (&dtk, &dtkp1)) in iter {
+        dpsi = (-(dtk + dtkp1) * C64::i()) * H.dot(&psi.slice(s![.., k + 1]));
+        psi_new = &psi.slice(s![.., k]) + dpsi;
+        N = psi_new.mapv(|a| a * a.conj()).sum().sqrt();
+        (psi_new / N).move_into(psi.slice_mut(s![.., k + 2]));
     }
-    stack_arrays(nd::Axis(1), &psi)
-        .expect("schrodinger_evolve: array stacking error")
+    psi
 }
 
 /// Numerically integrate the Schrödinger equation using the midpoint rule for a
@@ -188,30 +219,25 @@ pub fn schrodinger_evolve_t(
 ) -> nd::Array2<C64>
 {
     let dt = array_diff(t);
-    let mut psi: Vec<nd::Array1<C64>> = Vec::with_capacity(t.len());
-    psi.push(psi0.clone());
-    psi.push(psi0.clone());
-    let mut len: usize = 2;
-    let mut psi_old: &nd::Array1<C64>;
-    let mut psi_cur: &nd::Array1<C64>;
+    let mut psi: nd::Array2<C64> = nd::Array::zeros((psi0.len(), t.len()));
     let mut dpsi: nd::Array1<C64>;
     let mut psi_new: nd::Array1<C64>;
     let mut N: C64;
+    psi.slice_mut(s![.., 0]).assign(psi0);
+    psi.slice_mut(s![.., 1]).assign(psi0);
     let iter
         = dt.iter()
         .zip(dt.iter().skip(1))
-        .zip(H.axis_iter(nd::Axis(2)).skip(1));
-    for ((&dtk, &dtkp1), Hk) in iter {
-        psi_old = psi.get(len - 2).unwrap();
-        psi_cur = psi.last().unwrap();
-        dpsi = (-(dtk + dtkp1) * C64::i()) * Hk.dot(psi_cur);
-        psi_new = psi_old + dpsi;
-        N = state_norm(&psi_new);
-        psi.push(psi_new / N);
-        len += 1;
+        .zip(H.axis_iter(nd::Axis(2)).skip(1))
+        .enumerate();
+    for (k, ((&dtk, &dtkp1), Hkp1)) in iter {
+        dpsi = (-(dtk + dtkp1) * C64::i())
+            * Hkp1.dot(&psi.slice(s![.., k + 1]));
+        psi_new = &psi.slice(s![.., k]) + dpsi;
+        N = psi_new.mapv(|a| a * a.conj()).sum().sqrt();
+        (psi_new / N).move_into(psi.slice_mut(s![.., k + 2]));
     }
-    stack_arrays(nd::Axis(1), &psi)
-        .expect("schrodinger_evolve_t: array stacking error")
+    psi
 }
 
 /// Numerically integrate the Schrödinger equation using fourth-order
@@ -226,48 +252,41 @@ pub fn schrodinger_evolve_rk4(
 ) -> nd::Array2<C64>
 {
     let dt = array_diff(t);
-    let mut psi: Vec<nd::Array1<C64>> = Vec::with_capacity(t.len());
-    psi.push(psi0.clone());
-    let mut psi_old: &nd::Array1<C64>;
+    let mut psi: nd::Array2<C64> = nd::Array::zeros((psi0.len(), t.len()));
+    let mut psi_old: nd::ArrayView1<C64>;
     let mut phi1: nd::Array1<C64>;
     let mut phi2: nd::Array1<C64>;
     let mut phi3: nd::Array1<C64>;
     let mut phi4: nd::Array1<C64>;
-    let mut psi_mid: nd::Array1<C64>;
     let mut psi_new: nd::Array1<C64>;
     let mut N: C64;
-    let rhs
-        = |H: nd::ArrayView2<C64>, ps: &nd::Array1<C64>| {
-            -C64::i() * H.dot(ps)
-        };
+    psi.slice_mut(s![.., 0]).assign(psi0);
+    psi.slice_mut(s![.., 1]).assign(psi0);
+    let rhs = |H: nd::ArrayView2<C64>, p: nd::ArrayView1<C64>| {
+        -C64::i() * H.dot(&p)
+    };
     let iter
-        = dt.iter().step_by(2)
-        .zip(dt.iter().skip(1).step_by(2))
+        = dt.iter()
+        .zip(dt.iter().skip(1))
         .zip(
-            H.axis_iter(nd::Axis(2)).step_by(2)
-            .zip(H.axis_iter(nd::Axis(2)).skip(1).step_by(2))
-            .zip(H.axis_iter(nd::Axis(2)).skip(2).step_by(2))
-        );
-    for ((&dtk, &dtkp1), ((Hk, Hkp1), Hkp2)) in iter {
-        psi_old = psi.last().unwrap();
+            H.axis_iter(nd::Axis(2))
+            .zip(H.axis_iter(nd::Axis(2)).skip(1))
+            .zip(H.axis_iter(nd::Axis(2)).skip(2))
+        )
+        .enumerate();
+    for (k, ((&dtk, &dtkp1), ((Hk, Hkp1), Hkp2))) in iter {
+        psi_old = psi.slice(s![.., k]);
         phi1 = rhs(Hk, psi_old);
-        phi2 = rhs(Hkp1, &(psi_old + &phi1 * dtk));
-        phi3 = rhs(Hkp1, &(psi_old + &phi2 * dtk));
-        phi4 = rhs(Hkp2, &(psi_old + &phi3 * (dtk + dtkp1)));
+        phi2 = rhs(Hkp1, (&psi_old + &phi1 * dtk).view());
+        phi3 = rhs(Hkp1, (&psi_old + &phi2 * dtk).view());
+        phi4 = rhs(Hkp2, (&psi_old + &phi3 * (dtk + dtkp1)).view());
         psi_new
-            = psi_old
-            + (phi1 + phi2 * 2.0 + phi3 * 2.0 + phi4) * ((dtk + dtkp1) / 12.0);
-        N = state_norm(&psi_new);
-        psi_new /= N;
-        psi_mid = (psi_old + &psi_new) * 0.5;
-        psi.push(psi_mid);
-        psi.push(psi_new);
+            = &psi_old
+            + (phi1 + phi2 * 2.0 + phi3 * 2.0 + phi4) * ((dtk + dtkp1) / 6.0);
+        N = psi_new.mapv(|a| a * a.conj()).sum().sqrt();
+        (psi_new / N).move_into(psi.slice_mut(s![.., k + 2]));
     }
-    if psi.len() < t.len() {
-        psi.push(psi.last().unwrap().clone());
-    }
-    stack_arrays(nd::Axis(1), &psi)
-        .expect("schrodinger_evolve_rk4: array stacking error")
+    psi
 }
 
 /// Numerically integrate the Liouville equation using the midpoint rule.
@@ -280,29 +299,25 @@ pub fn liouville_evolve(
 ) -> nd::Array3<C64>
 {
     let dt = array_diff(t);
-    let mut rho: Vec<nd::Array2<C64>> = Vec::with_capacity(t.len());
-    rho.push(rho0.clone());
-    rho.push(rho0.clone());
-    let mut len: usize = 2;
-    let mut rho_old: &nd::Array2<C64>;
-    let mut rho_cur: &nd::Array2<C64>;
+    let mut rho: nd::Array3<C64>
+        = nd::Array::zeros((rho0.shape()[0], rho0.shape()[1], t.len()));
     let mut drho: nd::Array2<C64>;
     let mut rho_new: nd::Array2<C64>;
     let mut N: C64;
+    rho.slice_mut(s![.., .., 0]).assign(rho0);
+    rho.slice_mut(s![.., .., 1]).assign(rho0);
     let iter
         = dt.iter()
-        .zip(dt.iter().skip(1));
-    for (&dtk, &dtkp1) in iter {
-        rho_old = rho.get(len - 2).unwrap();
-        rho_cur = rho.last().unwrap();
-        drho = (-(dtk + dtkp1) * C64::i()) * commutator(H, rho_cur);
-        rho_new = rho_old + drho;
+        .zip(dt.iter().skip(1))
+        .enumerate();
+    for (k, (&dtk, &dtkp1)) in iter {
+        drho = (-(dtk + dtkp1) * C64::i())
+            * commutator(H, &rho.slice(s![.., .., k + 1]));
+        rho_new = &rho.slice(s![.., .., k]) + drho;
         N = trace(&rho_new);
-        rho.push(rho_new / N);
-        len += 1;
+        (rho_new / N).move_into(rho.slice_mut(s![.., .., k + 2]));
     }
-    stack_arrays(nd::Axis(2), &rho)
-        .expect("liouville_evolve: array stacking error")
+    rho
 }
 
 /// Numerically integrate the Liouville equation using the midpoint rule for a
@@ -317,30 +332,26 @@ pub fn liouville_evolve_t(
 ) -> nd::Array3<C64>
 {
     let dt = array_diff(t);
-    let mut rho: Vec<nd::Array2<C64>> = Vec::with_capacity(t.len());
-    rho.push(rho0.clone());
-    rho.push(rho0.clone());
-    let mut len: usize = 2;
-    let mut rho_old: &nd::Array2<C64>;
-    let mut rho_cur: &nd::Array2<C64>;
+    let mut rho: nd::Array3<C64>
+        = nd::Array::zeros((rho0.shape()[0], rho0.shape()[1], t.len()));
     let mut drho: nd::Array2<C64>;
     let mut rho_new: nd::Array2<C64>;
     let mut N: C64;
+    rho.slice_mut(s![.., .., 0]).assign(rho0);
+    rho.slice_mut(s![.., .., 1]).assign(rho0);
     let iter
         = dt.iter()
         .zip(dt.iter().skip(1))
-        .zip(H.axis_iter(nd::Axis(2)).skip(1));
-    for ((&dtk, &dtkp1), Hk) in iter {
-        rho_old = rho.get(len - 2).unwrap();
-        rho_cur = rho.last().unwrap();
-        drho = (-(dtk + dtkp1) * C64::i()) * commutator(&Hk, rho_cur);
-        rho_new = rho_old + drho;
+        .zip(H.axis_iter(nd::Axis(2)).skip(1))
+        .enumerate();
+    for (k, ((&dtk, &dtkp1), Hkp1)) in iter {
+        drho = (-(dtk + dtkp1) * C64::i())
+            * commutator(&Hkp1, &rho.slice(s![.., .., k + 1]));
+        rho_new = &rho.slice(s![.., .., k]) + drho;
         N = trace(&rho_new);
-        rho.push(rho_new / N);
-        len += 1;
+        (rho_new / N).move_into(rho.slice_mut(s![.., .., k + 2]));
     }
-    stack_arrays(nd::Axis(2), &rho)
-        .expect("liouville_evolve_t: array stacking error")
+    rho
 }
 
 /// Numerically integrate the Liouville equation using fourth-order Runge-Kutta
@@ -355,53 +366,47 @@ pub fn liouville_evolve_rk4(
 ) -> nd::Array3<C64>
 {
     let dt = array_diff(t);
-    let mut rho: Vec<nd::Array2<C64>> = Vec::with_capacity(t.len());
-    rho.push(rho0.clone());
-    let mut rho_old: &nd::Array2<C64>;
+    let mut rho: nd::Array3<C64>
+        = nd::Array::zeros((rho0.shape()[0], rho0.shape()[1], t.len()));
+    let mut rho_old: nd::ArrayView2<C64>;
     let mut r1: nd::Array2<C64>;
     let mut r2: nd::Array2<C64>;
     let mut r3: nd::Array2<C64>;
     let mut r4: nd::Array2<C64>;
-    let mut rho_mid: nd::Array2<C64>;
     let mut rho_new: nd::Array2<C64>;
     let mut N: C64;
-    let rhs
-        = |H: nd::ArrayView2<C64>, r: &nd::Array2<C64>| {
-            -C64::i() * commutator(&H, r)
-        };
+    rho.slice_mut(s![.., .., 0]).assign(rho0);
+    rho.slice_mut(s![.., .., 1]).assign(rho0);
+    let rhs = |H: nd::ArrayView2<C64>, p: nd::ArrayView2<C64>| {
+        -C64::i() * commutator(&H, &p)
+    };
     let iter
-        = dt.iter().step_by(2)
-        .zip(dt.iter().skip(1).step_by(2))
+        = dt.iter()
+        .zip(dt.iter().skip(2))
         .zip(
-            H.axis_iter(nd::Axis(2)).step_by(2)
-            .zip(H.axis_iter(nd::Axis(2)).skip(1).step_by(2))
-            .zip(H.axis_iter(nd::Axis(2)).skip(2).step_by(2))
-        );
-    for ((&dtk, &dtkp1), ((Hk, Hkp1), Hkp2)) in iter {
-        rho_old = rho.last().unwrap();
+            H.axis_iter(nd::Axis(2))
+            .zip(H.axis_iter(nd::Axis(2)).skip(1))
+            .zip(H.axis_iter(nd::Axis(2)).skip(2))
+        )
+        .enumerate();
+    for (k, ((&dtk, &dtkp1), ((Hk, Hkp1), Hkp2))) in iter {
+        rho_old = rho.slice(s![.., .., k]);
         r1 = rhs(Hk, rho_old);
-        r2 = rhs(Hkp1, &(rho_old + &r1 * dtk));
-        r3 = rhs(Hkp1, &(rho_old + &r2 * dtk));
-        r4 = rhs(Hkp2, &(rho_old + &r3 * (dtk + dtkp1)));
+        r2 = rhs(Hkp1, (&rho_old + &r1 * dtk).view());
+        r3 = rhs(Hkp1, (&rho_old + &r2 * dtk).view());
+        r4 = rhs(Hkp2, (&rho_old + &r3 * (dtk + dtkp1)).view());
         rho_new
-            = rho_old
-            + (r1 + r2 * 2.0 + r3 * 2.0 + r4) * ((dtk + dtkp1) / 12.0);
-        N = trace(&rho_new);
-        rho_new /= N;
-        rho_mid = (rho_old + &rho_new) * 0.5;
-        rho.push(rho_mid);
-        rho.push(rho_new);
+            = &rho_old
+            + (r1 + r2 * 2.0 + r3 * 2.0 + r4) * ((dtk + dtkp1) / 6.0);
+        N = rho_new.mapv(|a| a * a.conj()).sum().sqrt();
+        (rho_new / N).move_into(rho.slice_mut(s![.., .., k + 2]));
     }
-    if rho.len() < t.len() {
-        rho.push(rho.last().unwrap().clone());
-    }
-    stack_arrays(nd::Axis(2), &rho)
-        .expect("liouville_evolve_rk4: array stacking error")
+    rho
 }
 
 /// Numerically integrate the Lindblad equation using the midpoint rule.
 ///
-/// Requires `H` to be in units of angular frequency.
+/// Requires `H` and `Y` to be in units of angular frequency.
 pub fn lindblad_evolve(
     rho0: &nd::Array2<C64>,
     H: &nd::Array2<C64>,
@@ -410,38 +415,34 @@ pub fn lindblad_evolve(
 ) -> nd::Array3<C64>
 {
     let dt = array_diff(t);
-    let mut rho: Vec<nd::Array2<C64>> = Vec::with_capacity(t.len());
-    rho.push(rho0.clone());
-    rho.push(rho0.clone());
-    let mut len: usize = 2;
-    let mut rho_old: &nd::Array2<C64>;
-    let mut rho_cur: &nd::Array2<C64>;
+    let mut rho: nd::Array3<C64>
+        = nd::Array::zeros((rho0.shape()[0], rho0.shape()[1], t.len()));
+    let mut rho_cur: nd::ArrayView2<C64>;
     let mut drho: nd::Array2<C64>;
     let mut rho_new: nd::Array2<C64>;
     let mut N: C64;
+    rho.slice_mut(s![.., .., 0]).assign(rho0);
+    rho.slice_mut(s![.., .., 1]).assign(rho0);
     let iter
         = dt.iter()
-        .zip(dt.iter().skip(1));
-    for (&dtk, &dtkp1) in iter {
-        rho_old = rho.get(len - 2).unwrap();
-        rho_cur = rho.last().unwrap();
-        drho
-            = (-C64::i() * commutator(H, rho_cur) + lindbladian(Y, rho_cur))
-            * (dtk + dtkp1);
-        rho_new = rho_old + drho;
+        .zip(dt.iter().skip(1))
+        .enumerate();
+    for (k, (&dtk, &dtkp1)) in iter {
+        rho_cur = rho.slice(s![.., .., k + 1]);
+        drho = C64::from(dtk + dtkp1)
+            * (-C64::i() * commutator(H, &rho_cur) + lindbladian(Y, &rho_cur));
+        rho_new = &rho.slice(s![.., .., k]) + drho;
         N = trace(&rho_new);
-        rho.push(rho_new / N);
-        len += 1;
+        (rho_new / N).move_into(rho.slice_mut(s![.., .., k + 2]));
     }
-    stack_arrays(nd::Axis(2), &rho)
-        .expect("lindblad_evolve: array stacking error")
+    rho
 }
 
 /// Numerically integrate the Lindblad equation using the midpoint rule for a
 /// time-dependent Hamiltonian.
 ///
-/// Requires `H` to be in units of angular frequency. The third index of `H`
-/// should correspond to time.
+/// Requires `H` and `Y` to be in units of angular frequency. The third index of
+/// `H` should correspond to time.
 pub fn lindblad_evolve_t(
     rho0: &nd::Array2<C64>,
     H: &nd::Array3<C64>,
@@ -450,39 +451,38 @@ pub fn lindblad_evolve_t(
 ) -> nd::Array3<C64>
 {
     let dt = array_diff(t);
-    let mut rho: Vec<nd::Array2<C64>> = Vec::with_capacity(t.len());
-    rho.push(rho0.clone());
-    rho.push(rho0.clone());
-    let mut len: usize = 2;
-    let mut rho_old: &nd::Array2<C64>;
-    let mut rho_cur: &nd::Array2<C64>;
+    let mut rho: nd::Array3<C64>
+        = nd::Array::zeros((rho0.shape()[0], rho0.shape()[1], t.len()));
+    let mut rho_cur: nd::ArrayView2<C64>;
     let mut drho: nd::Array2<C64>;
     let mut rho_new: nd::Array2<C64>;
     let mut N: C64;
+    rho.slice_mut(s![.., .., 0]).assign(rho0);
+    rho.slice_mut(s![.., .., 1]).assign(rho0);
     let iter
         = dt.iter()
         .zip(dt.iter().skip(1))
-        .zip(H.axis_iter(nd::Axis(2)).skip(1));
-    for ((&dtk, &dtkp1), Hk) in iter {
-        rho_old = rho.get(len - 2).unwrap();
-        rho_cur = rho.last().unwrap();
-        drho
-            = (-C64::i() * commutator(&Hk, rho_cur) + lindbladian(Y, rho_cur))
-            * (dtk + dtkp1);
-        rho_new = rho_old + drho;
+        .zip(H.axis_iter(nd::Axis(2)).skip(1))
+        .enumerate();
+    for (k, ((&dtk, &dtkp1), Hkp1)) in iter {
+        rho_cur = rho.slice(s![.., .., k + 1]);
+        drho = C64::from(dtk + dtkp1)
+            * (
+                -C64::i() * commutator(&Hkp1, &rho_cur)
+                + lindbladian(Y, &rho_cur)
+            );
+        rho_new = &rho.slice(s![.., .., k]) + drho;
         N = trace(&rho_new);
-        rho.push(rho_new / N);
-        len += 1;
+        (rho_new / N).move_into(rho.slice_mut(s![.., .., k + 2]));
     }
-    stack_arrays(nd::Axis(2), &rho)
-        .expect("lindblad_evolve_t: array stacking error")
+    rho
 }
 
-/// Numerically integrate the Lindblad equation using fourth-order Runge-Kutta
+/// Numerically integrate the Liouville equation using fourth-order Runge-Kutta
 /// for a time-dependent Hamiltonian.
 ///
-/// Requires `H` to be in units of angular frequency. The third index of `H`
-/// should correspond to time.
+/// Requires `H` and `Y` to be in units of angular frequency. The third index of
+/// `H` should correspond to time.
 pub fn lindblad_evolve_rk4(
     rho0: &nd::Array2<C64>,
     H: &nd::Array3<C64>,
@@ -491,48 +491,42 @@ pub fn lindblad_evolve_rk4(
 ) -> nd::Array3<C64>
 {
     let dt = array_diff(t);
-    let mut rho: Vec<nd::Array2<C64>> = Vec::with_capacity(t.len());
-    rho.push(rho0.clone());
-    let mut rho_old: &nd::Array2<C64>;
+    let mut rho: nd::Array3<C64>
+        = nd::Array::zeros((rho0.shape()[0], rho0.shape()[1], t.len()));
+    let mut rho_old: nd::ArrayView2<C64>;
     let mut r1: nd::Array2<C64>;
     let mut r2: nd::Array2<C64>;
     let mut r3: nd::Array2<C64>;
     let mut r4: nd::Array2<C64>;
-    let mut rho_mid: nd::Array2<C64>;
     let mut rho_new: nd::Array2<C64>;
     let mut N: C64;
-    let rhs
-        = |H: nd::ArrayView2<C64>, r: &nd::Array2<C64>| {
-            -C64::i() * commutator(&H, r) + lindbladian(Y, r)
-        };
+    rho.slice_mut(s![.., .., 0]).assign(rho0);
+    rho.slice_mut(s![.., .., 1]).assign(rho0);
+    let rhs = |H: nd::ArrayView2<C64>, p: nd::ArrayView2<C64>| {
+        -C64::i() * commutator(&H, &p) + lindbladian(Y, &p)
+    };
     let iter
-        = dt.iter().step_by(2)
-        .zip(dt.iter().skip(1).step_by(2))
+        = dt.iter()
+        .zip(dt.iter().skip(2))
         .zip(
-            H.axis_iter(nd::Axis(2)).step_by(2)
-            .zip(H.axis_iter(nd::Axis(2)).skip(1).step_by(2))
-            .zip(H.axis_iter(nd::Axis(2)).skip(2).step_by(2))
-        );
-    for ((&dtk, &dtkp1), ((Hk, Hkp1), Hkp2)) in iter {
-        rho_old = rho.last().unwrap();
+            H.axis_iter(nd::Axis(2))
+            .zip(H.axis_iter(nd::Axis(2)).skip(1))
+            .zip(H.axis_iter(nd::Axis(2)).skip(2))
+        )
+        .enumerate();
+    for (k, ((&dtk, &dtkp1), ((Hk, Hkp1), Hkp2))) in iter {
+        rho_old = rho.slice(s![.., .., k]);
         r1 = rhs(Hk, rho_old);
-        r2 = rhs(Hkp1, &(rho_old + &r1 * dtk));
-        r3 = rhs(Hkp1, &(rho_old + &r2 * dtk));
-        r4 = rhs(Hkp2, &(rho_old + &r3 * (dtk + dtkp1)));
+        r2 = rhs(Hkp1, (&rho_old + &r1 * dtk).view());
+        r3 = rhs(Hkp1, (&rho_old + &r2 * dtk).view());
+        r4 = rhs(Hkp2, (&rho_old + &r3 * (dtk + dtkp1)).view());
         rho_new
-            = rho_old
-            + (r1 + r2 * 2.0 + r3 * 2.0 + r4) * ((dtk + dtkp1) / 12.0);
-        N = trace(&rho_new);
-        rho_new /= N;
-        rho_mid = (rho_old + &rho_new) * 0.5;
-        rho.push(rho_mid);
-        rho.push(rho_new);
+            = &rho_old
+            + (r1 + r2 * 2.0 + r3 * 2.0 + r4) * ((dtk + dtkp1) / 6.0);
+        N = rho_new.mapv(|a| a * a.conj()).sum().sqrt();
+        (rho_new / N).move_into(rho.slice_mut(s![.., .., k + 2]));
     }
-    if rho.len() < t.len() {
-        rho.push(rho.last().unwrap().clone());
-    }
-    stack_arrays(nd::Axis(2), &rho)
-        .expect("lindblad_evolve_rk4: array stacking error")
+    rho
 }
 
 /// Find the index of the `M`-th local maximum in an array of oscillating
