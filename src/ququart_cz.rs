@@ -362,11 +362,11 @@ fn main() {
     const RABI: f64 = OMEGA;
 
     // const DET: f64 = 0.050 * OMEGA; const XI: f64 = 0.959 * PI;
-    // const DET: f64 = 0.075 * OMEGA; const XI: f64 = 0.938 * PI;
-    // const DET: f64 = 0.100 * OMEGA; const XI: f64 = 0.918 * PI;
-    // const DET: f64 = 0.125 * OMEGA; const XI: f64 = 0.898 * PI;
-    // const DET: f64 = 0.150 * OMEGA; const XI: f64 = 0.880 * PI;
-    // const DET: f64 = 0.175 * OMEGA; const XI: f64 = 0.863 * PI;
+    // const DET: f64 = 0.075 * OMEGA; const XI: f64 = 0.9382 * PI;
+    // const DET: f64 = 0.100 * OMEGA; const XI: f64 = 0.9176 * PI;
+    // const DET: f64 = 0.125 * OMEGA; const XI: f64 = 0.8975 * PI;
+    // const DET: f64 = 0.150 * OMEGA; const XI: f64 = 0.8796 * PI;
+    // const DET: f64 = 0.175 * OMEGA; const XI: f64 = 0.8629 * PI;
     // const DET: f64 = 0.200 * OMEGA; const XI: f64 = 0.8447 * PI;
     // const DET: f64 = 0.225 * OMEGA; const XI: f64 = 0.8296 * PI;
     // const DET: f64 = 0.250 * OMEGA; const XI: f64 = 0.8151 * PI;
@@ -385,6 +385,10 @@ fn main() {
     // const DET: f64 = 0.3759 * OMEGA;
     // const XI: f64 = 0.7575 * PI;
 
+    // // optimal, r_sep = 3.6840314986404 μm
+    // const DET: f64 = 0.3740 * OMEGA;
+    // const XI: f64 = 0.7581 * PI;
+
     // // optimal, r_sep = 6.25 μm
     // const DET: f64 = 0.363 * OMEGA;
     // const XI: f64 = 0.763 * PI;
@@ -397,17 +401,17 @@ fn main() {
     // const DET: f64 = 0.3738 * OMEGA;
     // const XI: f64 = 0.7582 * PI;
 
-    // optimal, r_sep = 4.00536061 μm
-    const DET: f64 = 0.3746 * OMEGA;
-    const XI: f64 = 0.7579 * PI;
+    // // optimal, r_sep = 4.00536061 μm
+    // const DET: f64 = 0.3746 * OMEGA;
+    // const XI: f64 = 0.7579 * PI;
 
     // // optimal, r_sep = 5.22875057 μm
     // const DET: f64 = 0.3524 * OMEGA;
     // const XI: f64 = 0.7644 * PI;
 
-    // // optimal, r_sep = 6.82581050 μm
-    // const DET: f64 = 0.2713 * OMEGA;
-    // const XI: f64 = 0.8023 * PI;
+    // optimal, r_sep = 6.82581050 μm
+    const DET: f64 = 0.2713 * OMEGA;
+    const XI: f64 = 0.8023 * PI;
 
     let (time, psi, _) = do_pulses(RABI, DET, XI, &[G0, C0]);
     write_npz!(
@@ -421,7 +425,7 @@ fn main() {
     let phases = cz_phases(RABI, DET, XI);
     // println!("{:+.6}", phases);
     // println!("        {}", phases.as_pydataline(DET / RABI, XI));
-    println!("{}", phases.error());
+    // println!("{}", phases.error());
 
     println!("done");
 }
