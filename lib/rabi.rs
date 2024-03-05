@@ -66,30 +66,6 @@ where
     L
 }
 
-// /// Compute the non-Hermitian part of the RHS of the Lindblad master equation.
-// pub fn lindbladian(Y: &nd::Array2<f64>, rho: &nd::Array2<C64>)
-//     -> nd::Array2<C64>
-// {
-//     let n: usize = Y.shape()[0];
-//     let mut L: nd::Array2<C64> = nd::Array2::zeros(Y.raw_dim());
-//     let mut M: nd::Array2<C64>;
-//     for ((a, b), &y) in Y.indexed_iter() {
-//         if y <= f64::EPSILON { continue; }
-//         M = nd::Array2::from_shape_fn(
-//             (n, n),
-//             |(i, j)| {
-//                 y * (
-//                     if i == a && j == a { rho[[b, b]] } else { C64::zero() }
-//                     - if i == b { rho[[i, j]] / 2.0 } else { C64::zero() }
-//                     - if j == b { rho[[i, j]] / 2.0 } else { C64::zero() }
-//                 )
-//             }
-//         );
-//         L += &M;
-//     }
-//     L
-// }
-
 /// Compute the trace of a square matrix `A`.
 pub fn trace(A: &nd::Array2<C64>) -> C64 {
     A.diag().iter().copied().sum()

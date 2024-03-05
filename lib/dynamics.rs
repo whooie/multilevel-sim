@@ -1217,26 +1217,22 @@ where
 /// Any desired weighting on decay rates should be performed within the
 /// [`SpontaneousDecay`] trait.
 #[derive(Clone, Debug)]
-pub struct YBuilder<S>
+pub struct YBuilder<'a, S>
 where S: SpontaneousDecay
 {
-    basis: Basis<S>,
-    decay: f64,
+    basis: &'a Basis<S>,
 }
 
-impl<S> YBuilder<S>
+impl<'a, S> YBuilder<'a, S>
 where S: SpontaneousDecay
 {
     /// Create a new `YBuilder`.
-    pub fn new(basis: Basis<S>, decay: f64) -> Self {
-        Self { basis, decay }
+    pub fn new(basis: &'a Basis<S>) -> Self {
+        Self { basis }
     }
 
     /// Get a reference to the basis.
-    pub fn basis(&self) -> &Basis<S> { &self.basis }
-
-    /// Get a mutable reference to the basis.
-    pub fn basis_mut(&mut self) -> &mut Basis<S> { &mut self.basis }
+    pub fn basis(&self) -> &Basis<S> { self.basis }
 
     /// Compute the decay rate coupling matrix.
     pub fn gen(&self) -> nd::Array2<f64> {
