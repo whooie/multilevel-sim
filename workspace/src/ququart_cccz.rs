@@ -17,8 +17,8 @@ use multilevel_sim::{
     hilbert::{ Basis, ProdBasis },
     dynamics::*,
     rabi::*,
-    systems::ququart::{ *, State::* },
 };
+use lib::systems::ququart::{ *, State::* };
 
 const B: f64 = 120.0; // G
 

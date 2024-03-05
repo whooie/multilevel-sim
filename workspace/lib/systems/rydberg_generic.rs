@@ -1,4 +1,7 @@
-use crate::{ hilbert::{ BasisState, SpinState, RydbergState }, spin::Spin, };
+use multilevel_sim::{
+    hilbert::{ BasisState, SpinState, RydbergState },
+    spin::Spin,
+};
 
 pub const C6: f64 = 300000.0; // MHz μm^6
 pub const R_SEP: f64 = 3.5; // μm

@@ -1,5 +1,5 @@
 use std::f64::consts::TAU;
-use crate::{
+use multilevel_sim::{
     zm_br_fn,
     hilbert::{ BasisState, SpinState, TrappedMagic },
     spin::Spin,

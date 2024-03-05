@@ -17,9 +17,9 @@ use multilevel_sim::{
     hilbert::{ Basis, Fock },
     dynamics::*,
     rabi::*,
-    systems::ququart::{ *, State::* },
     utils::FExtremum,
 };
+use lib::systems::ququart::{ *, State::* };
 
 const UNIT: f64 = 1e6; // working in MHz
 const B: f64 = 120.0; // G

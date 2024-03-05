@@ -13,8 +13,8 @@ use multilevel_sim::{
     hilbert::Basis,
     dynamics::*,
     rabi::*,
-    systems::rydberg_generic::*,
 };
+use lib::systems::rydberg_generic::*;
 
 const N_ATOMS: usize = 1;
 

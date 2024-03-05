@@ -17,9 +17,9 @@ use multilevel_sim::{
     hilbert::Basis,
     dynamics::*,
     rabi::*,
-    systems::telecom::{ *, State::* },
     utils::FExtremum,
 };
+use lib::systems::telecom::{ *, State::* };
 
 const UNIT: f64 = 1e6; // working in MHz
 

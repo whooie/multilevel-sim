@@ -1,33 +1,26 @@
 [package]
-name = "multilevel-sim"
+name = "workspace"
 version = "0.1.0"
 authors = [ "whooie <wcwhuie@gmail.com>",]
 edition = "2021"
 
 [dependencies]
-# ndrustfft = "*"
-anyhow = "1.0.75"
-indexmap = "2.1.0"
+multilevel-sim = { path = "../multilevel-sim", version = "*" }
 itertools = "0.11.0"
-ndarray = "0.15.6"
-ndarray-npy = "0.8.1"
 num-complex = "0.4.4"
-num-traits = "0.2.17"
-rand = "0.8.5"
-regex = "1.10.2"
-rustfft = "6.1.0"
-statrs = "0.16.0"
-thiserror = "1.0.50"
-toml = "0.8.6"
-wigner-symbols = "0.5.0"
-
-[dependencies.ndarray-linalg]
-version = "0.16.0"
-features = [ "openblas-system",]
+ndarray = "0.15.6"
+# ndarray-npy = "0.8.1"
+# rustfft = "6.1.0"
+# ndrustfft = "*"
+# rand = "0.8.5"
+# regex = "1.10.2"
+# rmpfit = "*"
+# thiserror = "*"
+anyhow = "1.0.75"
 
 [lib]
 path = "lib/lib.rs"
-name = "multilevel_sim"
+name = "lib"
 
 [[bin]]
 path = "src/rydberg_generic.rs"
@@ -64,6 +57,10 @@ name = "ququart_clock_corpse"
 [[bin]]
 path = "src/telecom-raman.rs"
 name = "telecom-raman"
+
+[dependencies.ndarray-linalg]
+version = "0.16.0"
+features = [ "openblas-system",]
 
 [profile.release]
 lto = true
