@@ -6,16 +6,14 @@ use indexmap::IndexMap;
 use itertools::Itertools;
 use num_complex::Complex64 as C64;
 use num_traits::{ Zero, One };
-use crate::{
-    spin::{ Spin }
-};
+use crate::spin::Spin;
 
 /* States *********************************************************************/
 
 /// A single basis state.
 pub trait BasisState: Clone + PartialEq + Eq + Hash + std::fmt::Debug {
-    /// Return `true` if two states can be coupled by an electric dipole
-    /// transition.
+    /// Return `true` if two states can be coupled by a stimulated electric
+    /// dipole transition.
     ///
     /// This method should be reflextive in its inputs.
     fn couples_to(&self, other: &Self) -> bool;
@@ -241,7 +239,9 @@ where S: BasisState
     /// Get an array representation of a linear combination of basis states,
     /// with weights determined by a weighting function.
     ///
-    /// The array is sized to match the number of states currently in `self`.
+    /// The weighting function will be passed a state, its index, and its
+    /// energy. The array is sized to match the number of states currently in
+    /// `self`.
     pub fn get_vector_weighted<F>(&self, weights: F) -> nd::Array1<C64>
     where F: Fn(&S, usize, f64) -> C64
     {
@@ -269,15 +269,58 @@ where S: BasisState
     }
 
     /// Get an array representation of the density matrix for a linear
-    /// combination of basis states with weights determined by a weighting
-    /// function.
+    /// combination of basis states (corresponding to a pure state) with weights
+    /// determined by a weighting function.
     ///
-    /// The array is sized to match the number of states currently in `self`.
-    pub fn get_density_weighted<F>(&self, weights: F) -> nd::Array2<C64>
+    /// The weighting function will be passed a state, its index, and its
+    /// energy. The array is sized to match the number of states currently in
+    /// `self`.
+    pub fn get_density_weighted_pure<F>(&self, weights: F) -> nd::Array2<C64>
     where F: Fn(&S, usize, f64) -> C64
     {
         let vector: nd::Array1<C64> = self.get_vector_weighted(weights);
         outer_prod(&vector, &vector)
+    }
+
+    /// Get an array representation of a density matrix formed from the linear
+    /// combination of all basis elements formed from the self-outer product of
+    /// all states currently in `self` with weights determined by a weighting
+    /// function.
+    ///
+    /// This method is a more general version of [`Self::get_density_weighted`],
+    /// which constructs a density matrix corresponding to pure states only. The
+    /// programmer is responsible for ensuring that the resulting matrix is
+    /// Hermitian and traces to 1. If these conditions are not met, the return
+    /// value will be `None`.
+    ///
+    /// The weighting function will be passed two tuples, each containing a
+    /// state, its index, and its energy, with the first corresponding to the
+    /// row or "ket" position of the matrix element. The array is sized to match
+    /// the number of states currently in `self`.
+    pub fn get_density_weighted<F>(&self, weights: F)
+        -> Option<nd::Array2<C64>>
+    where F: Fn((&S, usize, f64), (&S, usize, f64)) -> C64
+    {
+        let n = self.energies.len();
+        let rho: nd::Array2<C64>
+            = self.energies.iter().enumerate()
+            .cartesian_product(self.energies.iter().enumerate())
+            .map(|((i, (si, ei)), (j, (sj, ej)))| {
+                weights((si, i, *ei), (sj, j, *ej))
+            })
+            .collect::<nd::Array1<C64>>()
+            .into_shape((n, n))
+            .expect("Basis::get_density_weighted: error reshaping array");
+        if rho.diag().iter().sum::<C64>() != C64::one() {
+            return None;
+        }
+        if
+            !rho.iter().zip(rho.t().iter())
+                .all(|(rij, rji)| *rij == rji.conj())
+        {
+            return None;
+        }
+        Some(rho)
     }
 
     /// Get an array representiation of a density matrix for a completely

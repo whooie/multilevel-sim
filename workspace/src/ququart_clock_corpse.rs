@@ -175,7 +175,7 @@ fn doit_corpse(rabi_freq: f64, detuning: f64) -> Output {
 
     let rho0: nd::Array2<C64>
         = hbuilder00.basis()
-        .get_density_weighted(
+        .get_density_weighted_pure(
             |state, _index, _energy| {
                 match (state.atomic_state(), state.fock_index()) {
                     // (&G0, 0) => C64::from(1.0),

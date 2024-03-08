@@ -115,7 +115,7 @@ fn doit_1beam(
 
     // let rho0: nd::Array2<C64>
     //     = hbuilder0.basis()
-    //     .get_density_weighted(
+    //     .get_vector_density_weighted(
     //         |state, _index, _energy| {
     //             match (state.atomic_state(), state.fock_index()) {
     //                 // (&G0, 0) => C64::from(1.0),
@@ -255,7 +255,7 @@ fn doit_2beam(
     let rho0: nd::Array2<C64>
         // = pulse_g0c1.basis()
         = pulse_g0c0.basis()
-        .get_density_weighted(
+        .get_density_weighted_pure(
             |state, _index, _energy| {
                 match (state.atomic_state(), state.fock_index()) {
                     // (&G0, 0) => C64::from(1.0),

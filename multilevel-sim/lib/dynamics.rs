@@ -1214,8 +1214,8 @@ where
 ///
 /// The `i,j`-th entry of the generated matrix gives the decay rate, in units of
 /// angular frequency, of the `j`-th excited state to the `i`-th ground state.
-/// Any desired weighting on decay rates should be performed within the
-/// [`SpontaneousDecay`] trait.
+/// Any desired weighting on decay rates (e.g. Clebsch-Gordan coefficients)
+/// should be performed within the [`SpontaneousDecay`] impl.
 #[derive(Clone, Debug)]
 pub struct YBuilder<'a, S>
 where S: SpontaneousDecay

@@ -150,7 +150,8 @@ fn main() {
     let scan_out: ScanOutput
         = scan(
             single_rabi, 
-            detuning, 0.0..150.0,
+            detuning,
+            0.0..150.0,
             PI / 12.0..5.0 * PI / 12.0,
             100,
         );

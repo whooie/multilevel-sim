@@ -3,13 +3,10 @@
 //!
 //! Where unspecified, the last index of an array corresponds to time.
 
-#![allow(unused_imports)]
-
 use ndarray::{ self as nd, s };
 use ndarray_linalg::{ self as la, Eigh, Solve };
 use num_complex::Complex64 as C64;
 use num_traits::Zero;
-use crate::hilbert::outer_prod;
 
 /// Compute the commutator `[A, B] = A B - B A`.
 pub fn commutator<SA, SB>(
@@ -68,7 +65,7 @@ where
 
 /// Compute the trace of a square matrix `A`.
 pub fn trace(A: &nd::Array2<C64>) -> C64 {
-    A.diag().iter().copied().sum()
+    A.diag().iter().map(|a| a.norm()).sum::<f64>().into()
 }
 
 pub fn stack_arrays<A, D>(axis: nd::Axis, arrays: &[nd::Array<A, D>])
@@ -227,6 +224,7 @@ pub fn schrodinger_evolve_rk4(
     t: &nd::Array1<f64>,
 ) -> nd::Array2<C64>
 {
+    let n = t.len();
     let dt = array_diff(t);
     let mut psi: nd::Array2<C64> = nd::Array::zeros((psi0.len(), t.len()));
     let mut psi_old: nd::ArrayView1<C64>;
@@ -237,7 +235,6 @@ pub fn schrodinger_evolve_rk4(
     let mut psi_new: nd::Array1<C64>;
     let mut N: C64;
     psi.slice_mut(s![.., 0]).assign(psi0);
-    psi.slice_mut(s![.., 1]).assign(psi0);
     let rhs = |H: nd::ArrayView2<C64>, p: nd::ArrayView1<C64>| {
         -C64::i() * H.dot(&p)
     };
@@ -249,7 +246,8 @@ pub fn schrodinger_evolve_rk4(
             .zip(H.axis_iter(nd::Axis(2)).skip(1))
             .zip(H.axis_iter(nd::Axis(2)).skip(2))
         )
-        .enumerate();
+        .enumerate()
+        .step_by(2);
     for (k, ((&dtk, &dtkp1), ((Hk, Hkp1), Hkp2))) in iter {
         psi_old = psi.slice(s![.., k]);
         phi1 = rhs(Hk, psi_old);
@@ -261,6 +259,14 @@ pub fn schrodinger_evolve_rk4(
             + (phi1 + phi2 * 2.0 + phi3 * 2.0 + phi4) * ((dtk + dtkp1) / 6.0);
         N = psi_new.mapv(|a| a * a.conj()).sum().sqrt();
         (psi_new / N).move_into(psi.slice_mut(s![.., k + 2]));
+    }
+    for k in (1..n - 1).step_by(2) {
+        psi_new = (&psi.slice(s![.., k - 1]) + &psi.slice(s![.., k + 1])) / 2.0;
+        psi_new.move_into(psi.slice_mut(s![.., k]));
+    }
+    if n % 2 == 0 {
+        psi_new = psi.slice(s![.., n - 2]).to_owned();
+        psi_new.move_into(psi.slice_mut(s![.., n - 1]));
     }
     psi
 }
@@ -341,6 +347,7 @@ pub fn liouville_evolve_rk4(
     t: &nd::Array1<f64>,
 ) -> nd::Array3<C64>
 {
+    let n = t.len();
     let dt = array_diff(t);
     let mut rho: nd::Array3<C64>
         = nd::Array::zeros((rho0.shape()[0], rho0.shape()[1], t.len()));
@@ -352,19 +359,19 @@ pub fn liouville_evolve_rk4(
     let mut rho_new: nd::Array2<C64>;
     let mut N: C64;
     rho.slice_mut(s![.., .., 0]).assign(rho0);
-    rho.slice_mut(s![.., .., 1]).assign(rho0);
     let rhs = |H: nd::ArrayView2<C64>, p: nd::ArrayView2<C64>| {
         -C64::i() * commutator(&H, &p)
     };
     let iter
         = dt.iter()
-        .zip(dt.iter().skip(2))
+        .zip(dt.iter().skip(1))
         .zip(
             H.axis_iter(nd::Axis(2))
             .zip(H.axis_iter(nd::Axis(2)).skip(1))
             .zip(H.axis_iter(nd::Axis(2)).skip(2))
         )
-        .enumerate();
+        .enumerate()
+        .step_by(2);
     for (k, ((&dtk, &dtkp1), ((Hk, Hkp1), Hkp2))) in iter {
         rho_old = rho.slice(s![.., .., k]);
         r1 = rhs(Hk, rho_old);
@@ -376,6 +383,18 @@ pub fn liouville_evolve_rk4(
             + (r1 + r2 * 2.0 + r3 * 2.0 + r4) * ((dtk + dtkp1) / 6.0);
         N = rho_new.mapv(|a| a * a.conj()).sum().sqrt();
         (rho_new / N).move_into(rho.slice_mut(s![.., .., k + 2]));
+    }
+    for k in (1..n - 1).step_by(2) {
+        rho_new
+            = (
+                &rho.slice(s![.., .., k - 1])
+                + &rho.slice(s![.., .., k + 1])
+            ) / 2.0;
+        rho_new.move_into(rho.slice_mut(s![.., .., k]));
+    }
+    if n % 2 == 0 {
+        rho_new = rho.slice(s![.., .., n - 2]).to_owned();
+        rho_new.move_into(rho.slice_mut(s![.., .., n - 1]));
     }
     rho
 }
@@ -466,6 +485,7 @@ pub fn lindblad_evolve_rk4(
     t: &nd::Array1<f64>,
 ) -> nd::Array3<C64>
 {
+    let n = t.len();
     let dt = array_diff(t);
     let mut rho: nd::Array3<C64>
         = nd::Array::zeros((rho0.shape()[0], rho0.shape()[1], t.len()));
@@ -477,19 +497,19 @@ pub fn lindblad_evolve_rk4(
     let mut rho_new: nd::Array2<C64>;
     let mut N: C64;
     rho.slice_mut(s![.., .., 0]).assign(rho0);
-    rho.slice_mut(s![.., .., 1]).assign(rho0);
     let rhs = |H: nd::ArrayView2<C64>, p: nd::ArrayView2<C64>| {
         -C64::i() * commutator(&H, &p) + lindbladian(Y, &p)
     };
     let iter
         = dt.iter()
-        .zip(dt.iter().skip(2))
+        .zip(dt.iter().skip(1))
         .zip(
             H.axis_iter(nd::Axis(2))
             .zip(H.axis_iter(nd::Axis(2)).skip(1))
             .zip(H.axis_iter(nd::Axis(2)).skip(2))
         )
-        .enumerate();
+        .enumerate()
+        .step_by(2);
     for (k, ((&dtk, &dtkp1), ((Hk, Hkp1), Hkp2))) in iter {
         rho_old = rho.slice(s![.., .., k]);
         r1 = rhs(Hk, rho_old);
@@ -499,8 +519,20 @@ pub fn lindblad_evolve_rk4(
         rho_new
             = &rho_old
             + (r1 + r2 * 2.0 + r3 * 2.0 + r4) * ((dtk + dtkp1) / 6.0);
-        N = rho_new.mapv(|a| a * a.conj()).sum().sqrt();
+        N = trace(&rho_new);
         (rho_new / N).move_into(rho.slice_mut(s![.., .., k + 2]));
+    }
+    for k in (1..n - 1).step_by(2) {
+        rho_new
+            = (
+                &rho.slice(s![.., .., k - 1])
+                + &rho.slice(s![.., .., k + 1])
+            ) / 2.0;
+        rho_new.move_into(rho.slice_mut(s![.., .., k]));
+    }
+    if n % 2 == 0 {
+        rho_new = rho.slice(s![.., .., n - 2]).to_owned();
+        rho_new.move_into(rho.slice_mut(s![.., .., n - 1]));
     }
     rho
 }
