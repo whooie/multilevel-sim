@@ -27,6 +27,10 @@ path = "src/rydberg_generic.rs"
 name = "rydberg_generic"
 
 [[bin]]
+path = "src/free_photon.rs"
+name = "free_photon"
+
+[[bin]]
 path = "src/clock.rs"
 name = "clock"
 
@@ -55,8 +59,12 @@ path = "src/ququart_clock_corpse.rs"
 name = "ququart_clock_corpse"
 
 [[bin]]
-path = "src/telecom-raman.rs"
-name = "telecom-raman"
+path = "src/telecom_raman.rs"
+name = "telecom_raman"
+
+[[bin]]
+path = "src/time_bin.rs"
+name = "time_bin"
 
 [dependencies.ndarray-linalg]
 version = "0.16.0"

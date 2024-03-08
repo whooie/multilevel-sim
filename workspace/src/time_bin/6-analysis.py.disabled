@@ -1,0 +1,176 @@
+from itertools import product
+from pathlib import Path
+import sys
+import numpy as np
+import whooie.pyplotdefs as pd
+
+datadir = Path("output").joinpath("time_bin")
+data = np.load(str(datadir.joinpath("final.npz")))
+rho = data["rho"]
+
+atom_states = [
+    "C0",
+    "C1",
+    "T0",
+    "T1",
+    "T2",
+    "T3",
+]
+comp_states = ["C0", "C1"]
+early_states = [
+    0,
+    1,
+    2,
+    3,
+]
+late_states = [
+    0,
+    1,
+    2,
+    3,
+]
+photon_states = list(product(early_states, late_states))
+single_photon_states = [(0, 1), (1, 0)]
+
+iso_states = [
+    (a, p)
+    for (a, p) in product(atom_states, photon_states)
+    if a in comp_states and p in single_photon_states
+]
+iso_selector = np.array([
+    [1.0 if s == s0 else 0.0 for s in product(atom_states, photon_states)]
+    for s0 in iso_states
+])
+rho_iso = iso_selector @ rho @ iso_selector.T
+
+print(rho_iso)
+print(np.diag(rho_iso).sum())
+
+time_bin_states = ["t0", "t1", "t2"]
+
+path1_states = ["a", "b"]
+bs1_states = list(product(path1_states, time_bin_states))
+def bs1(ph: float) -> np.ndarray:
+    eiph = np.exp(1j * ph)
+    rt2 = np.sqrt(2)
+
+    def mel(si: (str, str), sj: (int, int)) -> complex:
+        match (sj, si):
+            case ((1, 0), ("a", "t0")):
+                return eiph / rt2
+            case ((1, 0), ("b", "t1")):
+                return 1j / rt2
+            case ((0, 1), ("a", "t1")):
+                return eiph / rt2
+            case ((0, 1), ("b", "t2")):
+                return 1j / rt2
+            case _:
+                return 0.0
+
+    return np.array(
+        [[mel(si, sj) for sj in single_photon_states] for si in bs1_states])
+
+path2_states = ["A", "B"]
+bs2_states = list(product(path2_states, time_bin_states))
+def bs2() -> np.ndarray:
+    rt2 = np.sqrt(2)
+
+    def mel(si: (str, str), sj: (str, str)) -> complex:
+        match (sj, si):
+            case (("a", t0), ("A", t1)) if t0 == t1:
+                return 1j / rt2
+            case (("a", t0), ("B", t1)) if t0 == t1:
+                return 1.0 / rt2
+            case (("b", t0), ("A", t1)) if t0 == t1:
+                return 1.0 / rt2
+            case (("b", t0), ("B", t1)) if t0 == t1:
+                return 1j / rt2
+            case _:
+                return 0.0
+
+    return np.array([[mel(si, sj) for sj in bs1_states] for si in bs2_states])
+
+atom_bin_states = ["-z", "+x", "+z"]
+def atom_proj(ph: float) -> np.ndarray:
+    eiph = np.exp(1j * ph)
+    rt2 = np.sqrt(2)
+
+    def mel(si: str, sj: str) -> complex:
+        match (sj, si):
+            case ("C0", "-z"):
+                return 1.0
+            case ("C0", "+x"):
+                return 1.0 / rt2
+            case ("C1", "+x"):
+                return eiph / rt2
+            case ("C1", "+z"):
+                return 1.0
+            case _:
+                return 0.0
+
+    return np.array(
+        [[mel(si, sj) for sj in comp_states] for si in atom_bin_states])
+
+det_states = list(product(atom_bin_states, bs2_states))
+analysis_states = list(product(atom_bin_states, time_bin_states))
+def det_sum() -> np.ndarray:
+    rt2 = np.sqrt(2)
+
+    def mel(si: (str, str), sj: (str, (str, str))) -> complex:
+        match (sj, si):
+            case ((aj, ("A", tj)), (ai, ti)) if aj == ai and tj == ti:
+                return 1.0 / rt2
+            case ((aj, ("B", tj)), (ai, ti)) if aj == ai and tj == ti:
+                return 1.0 / rt2
+            case _:
+                return 0.0
+
+    return np.array(
+        [[mel(si, sj) for sj in det_states] for si in analysis_states])
+
+def probs(ph: float, rho: np.ndarray) -> np.ndarray:
+    BS1 = np.kron(np.eye(len(comp_states)), bs1(ph))
+    rho_bs1 = BS1 @ rho @ BS1.T.conj()
+    # print(np.diag(rho_bs1))
+
+    BS2 = np.kron(np.eye(len(comp_states)), bs2())
+    rho_bs2 = BS2 @ rho_bs1 @ BS2.T.conj()
+    # print(np.diag(rho_bs2))
+
+    U_atom = np.kron(atom_proj(ph), np.eye(len(bs2_states)))
+    rho_u_atom = U_atom @ rho_bs2 @ U_atom.T.conj()
+    # print(np.diag(rho_u_atom))
+
+    detsum = det_sum()
+    rho_detsum = detsum @ rho_u_atom @ detsum.T.conj()
+
+    return np.diag(rho_detsum).real
+
+# print(probs(0.0, rho_iso))
+# sys.exit(0)
+
+ph = np.linspace(0.0, 2.0 * np.pi, 1000)
+P = np.array([probs(f, rho_iso) for f in ph]).T
+
+(
+    pd.Plotter()
+    .colorplot(
+        ph / np.pi,
+        np.arange(len(analysis_states), dtype=int),
+        P,
+        cmap=pd.colormaps["vibrant"],
+    )
+    .colorbar()
+    .set_xlabel("$\\varphi / \\pi$")
+    .set_ylabel("Measurement result")
+    .set_yticks(
+        np.arange(len(analysis_states), dtype=int),
+        analysis_states,
+        fontsize="xx-small",
+    )
+    .set_clabel("Probability")
+    .grid(False, which="both")
+    .savefig(datadir.joinpath("time_bin_analysis_probs.png"))
+)
+
+

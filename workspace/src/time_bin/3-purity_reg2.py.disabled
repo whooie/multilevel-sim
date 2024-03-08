@@ -1,0 +1,48 @@
+from itertools import product
+from pathlib import Path
+import numpy as np
+import whooie.pyplotdefs as pd
+
+datadir = Path("output").joinpath("time_bin")
+data = np.load(str(datadir.joinpath("reg2.npz")))
+time = data["time"]
+rho = data["rho"]
+
+atom_states = [
+    "C0",
+    "C1",
+    "T0",
+    "T1",
+    "T2",
+    "T3",
+]
+early_states = [
+    0,
+    1,
+    2,
+    3,
+]
+late_states = [
+    0,
+    1,
+    2,
+    3,
+]
+photon_states = list(product(early_states, late_states))
+states = list(product(atom_states, early_states, late_states))
+
+rho_final = rho[:, :, -1]
+
+rho_atom = sum(
+    (
+        Tn := np.kron(
+            np.eye(len(atom_states)),
+            np.array([[1.0] if k == p else [0.0] for k in photon_states]),
+        )
+    ).T @ rho_final @ Tn
+    for p in photon_states
+)
+atom_purity = np.diag(rho_atom @ rho_atom).sum().real
+
+print(f"final atom purity = {atom_purity}")
+

@@ -1,0 +1,81 @@
+from itertools import product
+from pathlib import Path
+import numpy as np
+import whooie.pyplotdefs as pd
+
+datadir = Path("output").joinpath("time_bin")
+data_reg1 = np.load(str(datadir.joinpath("reg1.npz")))
+data_raman = np.load(str(datadir.joinpath("raman.npz")))
+time = np.append(data_reg1["time"], data_raman["time"])
+rho = np.append(data_reg1["rho"], data_raman["rho"], axis=2)
+
+atom_states = [
+    "C0",
+    "C1",
+    "T0",
+    "T1",
+    "T2",
+    "T3",
+]
+photon_states = [
+    0,
+    1,
+    2,
+    3,
+]
+states = [
+    (atom, photon) for atom, photon in product(atom_states, photon_states)]
+label = lambda state: f"{state[0]}, {state[1]}"
+probs = np.array([rho[k, k, :] for k in range(rho.shape[0])])
+select_atom = lambda a: (
+    np.array([1.0 if atom == a else 0.0 for atom, _photon in states]))
+select_photon = lambda p: (
+    np.array([1.0 if photon == p else 0.0 for _atom, photon in states]))
+
+nbar = (probs.T @ np.array([photon for _atom, photon in states])).real
+
+t_c0_max = time[probs[0, :].argmax()]
+print(f"max C0 prob @ t = {t_c0_max}")
+
+P = pd.Plotter()
+for k, (state_prob, state) in enumerate(zip(probs, states)):
+    P.plot(
+        time, state_prob.real,
+        marker="", linestyle="-" if k < 10 else "--" if k < 20 else ":",
+        label=label(state),
+    )
+(
+    P
+    .set_xlabel("Time [μs]")
+    .set_ylabel("Probability")
+    .legend(fontsize="xx-small")
+    .ggrid()
+    .savefig(datadir.joinpath("time_bin_all_states.png"))
+)
+
+P = pd.Plotter.new(nrows=3, sharex=True, as_plotarray=True)
+for atom in atom_states:
+    P[0].plot(
+        time, (probs.T @ select_atom(atom)).real,
+        marker="", linestyle="-",
+        label=atom,
+    )
+P[0].ggrid().legend()
+for photon in photon_states:
+    P[1].plot(
+        time, (probs.T @ select_photon(photon)).real,
+        marker="", linestyle="-",
+        label=photon,
+    )
+P[1].ggrid().legend()
+P[2].plot(time, nbar, marker="", linestyle="-", color="k", label="$\\bar{n}$")
+P[2].ggrid().legend()
+(
+    P
+    .tight_layout(h_pad=0.05)
+    .supxlabel("Time [μs]")
+    .savefig(datadir.joinpath("time_bin_traces.png"))
+)
+
+# pd.show()
+

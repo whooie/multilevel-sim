@@ -1,0 +1,130 @@
+from itertools import product
+from pathlib import Path
+import numpy as np
+import whooie.pyplotdefs as pd
+
+datadir = Path("output").joinpath("time_bin")
+data = np.load(str(datadir.joinpath("reg2.npz")))
+time = data["time"]
+rho = data["rho"]
+
+atom_states = [
+    "C0",
+    "C1",
+    "T0",
+    "T1",
+    "T2",
+    "T3",
+]
+early_states = [
+    0,
+    1,
+    2,
+    3,
+]
+late_states = [
+    0,
+    1,
+    2,
+    3,
+]
+states = list(product(atom_states, early_states, late_states))
+probs = np.array([rho[k, k, :] for k in range(rho.shape[0])])
+select_atom = lambda a: (
+    np.array([1.0 if atom == a else 0.0 for atom, _early, _late in states]))
+select_early = lambda p: (
+    np.array([1.0 if early == p else 0.0 for _atom, early, _late in states]))
+select_late = lambda p: (
+    np.array([1.0 if late == p else 0.0 for _atom, _early, late in states]))
+
+nbar_late = (probs.T @ np.array([late for _atom, _early, late in states])).real
+
+def color(atom: str) -> str:
+    if atom == "C0":
+        return "C0"
+    elif atom == "C1":
+        return "C1"
+    elif atom == "T0":
+        return "C2"
+    elif atom == "T1":
+        return "C3"
+    elif atom == "T2":
+        return "C4"
+    elif atom == "T3":
+        return "C5"
+    else:
+        raise Exception(f"invalid state {atom}")
+
+def dashes(early: int, late: int) -> list[float]:
+    b_early = f"{bin(early)[2:]:>02}"
+    d_early = [[0, 2] if b == "0" else [1, 1] for b in b_early]
+    b_late = f"{bin(late)[2:]:>02}"
+    d_late = [[0, 2] if b == "0" else [1, 1] for b in b_late]
+    return (
+        [6, 1]
+        + [d for dd in d_early for d in dd]
+        + [3, 1]
+        + [d for dd in d_late for d in dd]
+    )
+
+def label(state: (str, int, int)) -> str:
+    return f"{state[0]}, {state[1]}, {state[2]}"
+
+handle_length = pd.pp.rcParams["legend.handlelength"]
+pd.pp.rcParams["legend.handlelength"] = 4.0
+P = pd.Plotter()
+for k, (state_prob, state) in enumerate(zip(probs, states)):
+    P.plot(
+        time, state_prob.real,
+        marker="", color=color(state[0]), dashes=dashes(state[1], state[2]),
+        label=label(state),
+    )
+(
+    P
+    .set_xlabel("Time [μs]")
+    .set_ylabel("Probability")
+    .legend(
+        frameon=False,
+        loc="upper left",
+        bbox_to_anchor=(-0.2, 1.8),
+        ncol=6,
+        columnspacing=1.0,
+        fontsize="xx-small",
+        framealpha=1.0,
+        edgecolor="k",
+    )
+    .ggrid()
+    .savefig(datadir.joinpath("time_bin_reg2_all_states.png"))
+)
+pd.pp.rcParams["legend.handlelength"] = handle_length
+
+P = pd.Plotter.new(nrows=3, sharex=True, as_plotarray=True)
+for atom in atom_states:
+    P[0].plot(
+        time, (probs.T @ select_atom(atom)).real,
+        marker="", linestyle="-", color=color(atom),
+        label=atom,
+    )
+P[0].ggrid().legend()
+for late in late_states:
+    P[1].plot(
+        time, (probs.T @ select_late(late)).real,
+        marker="", linestyle="-",
+        label=late,
+    )
+P[1].ggrid().legend()
+P[2].plot(
+    time, nbar_late,
+    marker="", linestyle="-", color="k",
+    label="$\\bar{n}_{\\mathregular{late}}$",
+)
+P[2].ggrid().legend()
+(
+    P
+    .tight_layout(h_pad=0.05)
+    .supxlabel("Time [μs]")
+    .savefig(datadir.joinpath("time_bin_reg2_traces.png"))
+)
+
+# pd.show()
+
