@@ -28,14 +28,33 @@ def "main exec" [
 
   if $clear { clearall }
   if $list or ($target == null) {
-    $targets | each {|t| print $t }
+    echo "Available targets:"
+    $targets | each {|t| print $"  ($t)" }
     return
   }
   if not $scripts_only {
     cargo run --release --bin $target
   }
   if not $compute_only {
-    ls $"src/($target)/*.py" | get name | each {|script| python $script }
+    ls $"src/($target)"
+    | get name
+    | where ($it | str ends-with ".py")
+    | sort
+    | each {|py|
+        print $"(ansi white_bold):: python ($py)(ansi reset)"
+        python $py
+        # let result = (python $py | complete)
+        # if $result.exit_code == 0 {
+        #   try { echo ($result.stdout | str trim) }
+        # } else {
+        #   print "hello"
+        #   try { echo ($result.stdout | str trim) }
+        #   try { echo ($result.stderr | str trim) }
+        #   error make {
+        #     msg: $"script ($py) failed with exit code ($result.exit_code)"
+        #   }
+        # }
+      }
   }
 
   return
