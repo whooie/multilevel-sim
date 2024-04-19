@@ -2339,6 +2339,21 @@ where S: SpontaneousDecay
     f_decay: Option<Rc<dyn Fn(&S, &S) -> Option<f64> + 'a>>,
 }
 
+impl<'a, S> fmt::Debug for YBuilder<'a, S>
+where S: SpontaneousDecay
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "YBuilder {{ basis: {:?}, f_decay: ", self.basis)?;
+        if self.f_decay.is_some() {
+            write!(f, "Some(...)")?;
+        } else {
+            write!(f, "None")?;
+        }
+        write!(f, " }}")?;
+        Ok(())
+    }
+}
+
 impl<'a, S> YBuilder<'a, S>
 where S: SpontaneousDecay
 {
