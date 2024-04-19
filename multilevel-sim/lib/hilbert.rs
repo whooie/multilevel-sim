@@ -11,7 +11,7 @@ use crate::spin::Spin;
 /* States *********************************************************************/
 
 /// A single basis state.
-pub trait BasisState: Clone + PartialEq + Eq + Hash + std::fmt::Debug {
+pub trait BasisState: Clone + Eq + Hash + std::fmt::Debug {
     /// Return `true` if two states can be coupled by a stimulated electric
     /// dipole transition.
     ///
@@ -105,6 +105,74 @@ where S: BasisState
     }
 }
 
+/// Combination of a linear array of `N` atomic states with `P` cavity-photonic
+/// Fock state indices.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Cavity<const N: usize, const P: usize, S>([S; N], [usize; P])
+where S: BasisState;
+
+impl<const N: usize, const P: usize, S> Cavity<N, P, S>
+where S: BasisState
+{
+    /// Return the atomic states.
+    pub fn atomic_states(&self) -> &[S; N] { &self.0 }
+
+    /// Return `true` if two states have the same atomic part.
+    pub fn same_atomic(&self, other: &Self) -> bool { self.0 == other.0 }
+
+    /// Return the number of photons in each mode.
+    pub fn photons(&self) -> &[usize; P] { &self.1 }
+}
+
+impl<const N: usize, const P: usize, S>
+    From<([S; N], [usize; P])> for Cavity<N, P, S>
+where S: BasisState
+{
+    fn from(sn: ([S; N], [usize; P])) -> Self {
+        let (s, n) = sn;
+        Self(s, n)
+    }
+}
+
+/// Describes the strength of the coupling to a particular cavity mode index.
+///
+/// The first item of each variant is the mode index (*not* the number of
+/// photons in the mode), and the second is the coupling parameter (commonly
+/// called *g*).
+///
+/// See also [`CavityCoupling::coupling`].
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum PhotonLadder {
+    Emit(usize, f64),
+    Absorb(usize, f64),
+}
+
+impl PhotonLadder {
+    /// Takes `Emit` variants to `Absorb` and vice-versa, leaving the mode
+    /// number and coupling strength invariant.
+    pub fn adjoint(self) -> Self {
+        match self {
+            Self::Emit(m, g) => Self::Absorb(m, g),
+            Self::Absorb(m, g) => Self::Emit(m, g),
+        }
+    }
+}
+
+/// Trait to describe an N-atom state coupling to `P` cavity-photonic modes.
+///
+/// Note that this trait does not extend [`BasisState`] because it is not
+/// possible a priori to describe whether two atom-cavity states couple from
+/// only the information provided by `BasisState`; instead, only the subtraits
+/// of `BasisState` are extended.
+pub trait CavityCoupling<const P: usize>: Clone + Eq + Hash + std::fmt::Debug {
+    /// Cavity mode spacing(s) in units of angular frequency.
+    const MODE_SPACING: [f64; P];
+
+    /// Get the cavity coupling parameter (commonly called *g*) for a transition
+    /// from `self` to `to_other`.
+    fn coupling(&self, to_other: &Self) -> Option<PhotonLadder>;
+}
+
 /// Extends [`BasisState`] to include spontaneous decay properties.
 pub trait SpontaneousDecay: BasisState {
     /// Get the rate of spontaneous decay to another state in units of angular
@@ -136,25 +204,25 @@ pub fn outer_prod(a: &nd::Array1<C64>, b: &nd::Array1<C64>)
 /// via [`AsRef`], [`AsMut`], [`Deref`] and [`DerefMut`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct Basis<S>
-where S: BasisState
+where S: Clone + Eq + Hash
 {
     energies: IndexMap<S, f64>,
 }
 
 impl<S> AsRef<IndexMap<S, f64>> for Basis<S>
-where S: BasisState
+where S: Clone + Eq + Hash
 {
     fn as_ref(&self) -> &IndexMap<S, f64> { &self.energies }
 }
 
 impl<S> AsMut<IndexMap<S, f64>> for Basis<S>
-where S: BasisState
+where S: Clone + Eq + Hash
 {
     fn as_mut(&mut self) -> &mut IndexMap<S, f64> { &mut self.energies }
 }
 
 impl<S> Deref for Basis<S>
-where S: BasisState
+where S: Clone + Eq + Hash
 {
     type Target = IndexMap<S, f64>;
 
@@ -162,19 +230,19 @@ where S: BasisState
 }
 
 impl<S> DerefMut for Basis<S>
-where S: BasisState
+where S: Clone + Eq + Hash
 {
     fn deref_mut(&mut self) -> &mut Self::Target { &mut self.energies }
 }
 
 impl<S> Default for Basis<S>
-where S: BasisState
+where S: Clone + Eq + Hash
 {
     fn default() -> Self { Self { energies: IndexMap::default() } }
 }
 
 impl<S> FromIterator<(S, f64)> for Basis<S>
-where S: BasisState
+where S: Clone + Eq + Hash
 {
     fn from_iter<I>(iter: I) -> Self
     where I: IntoIterator<Item = (S, f64)>
@@ -184,7 +252,7 @@ where S: BasisState
 }
 
 impl<S> Basis<S>
-where S: BasisState
+where S: Clone + Eq + Hash
 {
     /// Create a new, empty basis.
     pub fn new() -> Self { Self::default() }
@@ -381,32 +449,32 @@ where S: BasisState
 
 /* Product-state basis ********************************************************/
 
-/// A collection of unique compositions of [`BasisState`]s with associated
+/// A collection of unique compositions of [`Clone + Eq + Hash`]s with associated
 /// energies in units of angular frequency.
 ///
 /// This collection is backed by a single [`IndexMap`], which can be accessed
 /// via [`AsRef`], [`AsMut`], [`Deref`] and [`DerefMut`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct ProdBasis<S>
-where S: BasisState
+where S: Clone + Eq + Hash
 {
     energies: IndexMap<Vec<S>, f64>,
 }
 
 impl<S> AsRef<IndexMap<Vec<S>, f64>> for ProdBasis<S>
-where S: BasisState
+where S: Clone + Eq + Hash
 {
     fn as_ref(&self) -> &IndexMap<Vec<S>, f64> { &self.energies }
 }
 
 impl<S> AsMut<IndexMap<Vec<S>, f64>> for ProdBasis<S>
-where S: BasisState
+where S: Clone + Eq + Hash
 {
     fn as_mut(&mut self) -> &mut IndexMap<Vec<S>, f64> { &mut self.energies }
 }
 
 impl<S> Deref for ProdBasis<S>
-where S: BasisState
+where S: Clone + Eq + Hash
 {
     type Target = IndexMap<Vec<S>, f64>;
 
@@ -414,19 +482,19 @@ where S: BasisState
 }
 
 impl<S> DerefMut for ProdBasis<S>
-where S: BasisState
+where S: Clone + Eq + Hash
 {
     fn deref_mut(&mut self) -> &mut Self::Target { &mut self.energies }
 }
 
 impl<S> Default for ProdBasis<S>
-where S: BasisState
+where S: Clone + Eq + Hash
 {
     fn default() -> Self { Self { energies: IndexMap::default() } }
 }
 
 impl<S> FromIterator<(Vec<S>, f64)> for ProdBasis<S>
-where S: BasisState
+where S: Clone + Eq + Hash
 {
     fn from_iter<I>(iter: I) -> Self
     where I: IntoIterator<Item = (Vec<S>, f64)>
@@ -436,7 +504,7 @@ where S: BasisState
 }
 
 impl<S> ProdBasis<S>
-where S: BasisState
+where S: Clone + Eq + Hash
 {
     /// Create a new, empty product basis.
     pub fn new() -> Self { Self::default() }
@@ -582,7 +650,7 @@ where S: BasisState
     pub fn from_kron<'a, I>(bases: I) -> Self
     where
         I: IntoIterator<Item = &'a Basis<S>>,
-        S: BasisState + 'a
+        S: Clone + Eq + Hash + 'a
     {
         bases.into_iter()
             .map(|basis| basis.iter())
