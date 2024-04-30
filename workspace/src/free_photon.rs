@@ -65,12 +65,15 @@ fn doit() -> Data<Photon> {
     let j: usize = basis.get_index_of(&Photon(E1, 0)).unwrap();
     H.slice_mut(nd::s![i, j, ..])
         .iter_mut()
-        .for_each(|h| { *h += c!(GAMMA); });
+        .for_each(|h| { *h += c!(i GAMMA); });
+    // H.slice_mut(nd::s![j, i, ..])
+    //     .iter_mut()
+    //     .for_each(|h| { *h += c!(i GAMMA); });
     // let k: usize = basis.get_index_of(&Photon(G1, 0)).unwrap();
     // H.slice_mut(nd::s![k, k, ..])
     //     .iter_mut()
     //     .for_each(|h| { *h += c!(i GAMMA / 2.0); });
-    println!("{:.3}", H.slice(nd::s![.., .., N - 1]));
+    println!("{:+.3}", H.slice(nd::s![.., .., N - 1]));
 
     let psi0: nd::Array1<C64>
         = basis.get_vector_weighted(|state, _, _| {
@@ -79,7 +82,7 @@ fn doit() -> Data<Photon> {
                 _ => 0.0.into()
             }
         });
-    let psi: nd::Array2<C64> = schrodinger_evolve_rk4(&psi0, &H, &time);
+    let psi: nd::Array2<C64> = schrodinger::evolve_t(&psi0, &H, &time);
 
     drop(pulse);
     Data { basis, time, psi }

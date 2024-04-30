@@ -72,7 +72,7 @@ fn doit_reg1() -> Data<Early> {
                 _ => 0.0.into(),
             }
         });
-    let rho: nd::Array3<C64> = lindblad_evolve_rk4(&rho0, &H, &Y, &time);
+    let rho: nd::Array3<C64> = lindblad::evolve_t(&rho0, &H, &Y, &time);
 
     drop(pulse);
     drop(decay);
@@ -109,7 +109,7 @@ fn doit_raman(reg1: Data<Early>) -> Data<Early> {
         = nd::Array1::linspace(t_init, t_init + T_RAMAN, N);
     let H: nd::Array3<C64> = pulse.gen(&time);
     let Y: nd::Array2<f64> = decay.gen();
-    let rho: nd::Array3<C64> = lindblad_evolve_rk4(&rho0, &H, &Y, &time);
+    let rho: nd::Array3<C64> = lindblad::evolve_t(&rho0, &H, &Y, &time);
 
     drop(pulse);
     drop(decay);
@@ -164,7 +164,7 @@ fn doit_reg2(raman: Data<Early>) -> Data<Late> {
                 .collect::<nd::Array1<C64>>()
         );
     let rho0: nd::Array2<C64> = nd::linalg::kron(&rho0, &late_photon_expand);
-    let rho: nd::Array3<C64> = lindblad_evolve_rk4(&rho0, &H, &Y, &time);
+    let rho: nd::Array3<C64> = lindblad::evolve_t(&rho0, &H, &Y, &time);
 
     drop(pulse);
     drop(decay);

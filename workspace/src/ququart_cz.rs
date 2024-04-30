@@ -147,7 +147,7 @@ fn do_pulses(
 
     let psi0: nd::Array1<C64>
         = pulse11.prod_basis().get_vector(init_state).unwrap();
-    let psi: nd::Array2<C64> = schrodinger_evolve_rk4(&psi0, &H, &time);
+    let psi: nd::Array2<C64> = schrodinger::evolve_t(&psi0, &H, &time);
 
     let nt = time.len();
     let psi_ququart: nd::Array1<C64>

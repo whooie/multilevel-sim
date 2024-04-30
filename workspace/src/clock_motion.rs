@@ -63,7 +63,7 @@ fn main() {
         = hbuilder.thermal_state_density(&State::G0).unwrap();
     // let rho0: nd::Array2<C64>
     //     = hbuilder.basis().get_density(&(State::G0, 0).into()).unwrap();
-    let rho: nd::Array3<C64> = liouville_evolve_rk4(&rho0, &H, &time);
+    let rho: nd::Array3<C64> = liouville::evolve_t(&rho0, &H, &time);
     write_npz!(
         outdir.join("clock_motion.npz"),
         arrays: {

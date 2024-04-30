@@ -86,7 +86,7 @@ fn doit(rabi_freq: f64, detuning: f64, field: f64, pol_angle: f64)
     // println!("{:.3e}", H);
 
     let psi0: nd::Array1<C64> = basis.get_vector(&C1).unwrap();
-    let psi: nd::Array2<C64> = schrodinger_evolve_rk4(&psi0, &H, &time);
+    let psi: nd::Array2<C64> = schrodinger::evolve_t(&psi0, &H, &time);
     // let psi: nd::Array2<C64> = eigen_evolve(&psi0, &H, &time);
 
     drop(hbuilder);

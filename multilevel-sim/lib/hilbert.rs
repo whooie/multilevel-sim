@@ -51,7 +51,7 @@ pub trait Trapped: BasisState {
 
 /// Combination of an atomic state `S` with a motional Fock state index.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub struct Fock<S>(S, usize)
+pub struct Fock<S>(pub S, pub usize)
 where S: BasisState;
 
 impl<S> BasisState for Fock<S>
@@ -108,7 +108,7 @@ where S: BasisState
 /// Combination of a linear array of `N` atomic states with `P` cavity-photonic
 /// Fock state indices.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub struct Cavity<const N: usize, const P: usize, S>([S; N], [usize; P])
+pub struct Cavity<const N: usize, const P: usize, S>(pub [S; N], pub [usize; P])
 where S: BasisState;
 
 impl<const N: usize, const P: usize, S> Cavity<N, P, S>
@@ -131,6 +131,40 @@ where S: BasisState
     fn from(sn: ([S; N], [usize; P])) -> Self {
         let (s, n) = sn;
         Self(s, n)
+    }
+}
+
+/// Simple representation of a spin-1/2 system.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum HSpin {
+    /// Spin-down state with spin J = 1/2, mJ = -1/2
+    Dn,
+    /// Spin-up state with spin J = 1/2, mJ = +1/2
+    Up,
+}
+
+impl HSpin {
+    /// Return appropriate `\sigma_z` eigenvalue.
+    pub fn sz(&self) -> f64 {
+        match *self {
+            Self::Dn =>  1.0,
+            Self::Up => -1.0,
+        }
+    }
+}
+
+impl BasisState for HSpin {
+    fn couples_to(&self, other: &Self) -> bool {
+        matches!((*self, *other), (Self::Dn, Self::Up) | (Self::Up, Self::Dn))
+    }
+}
+
+impl SpinState for HSpin {
+    fn spin(&self) -> Spin {
+        match *self {
+            Self::Dn => (1_u32, -1_i32).into(),
+            Self::Up => (1_u32,  1_i32).into(),
+        }
     }
 }
 
@@ -197,6 +231,25 @@ pub fn outer_prod(a: &nd::Array1<C64>, b: &nd::Array1<C64>)
 
 /* Bases **********************************************************************/
 
+#[derive(Clone)]
+pub struct States<'a, S> {
+    iter: indexmap::map::Keys<'a, S, f64>
+}
+
+impl<'a, S> Iterator for States<'a, S> {
+    type Item = &'a S;
+
+    fn next(&mut self) -> Option<Self::Item> { self.iter.next() }
+}
+
+pub trait StateIter<'a> {
+    type State;
+
+    fn num_states(&'a self) -> usize;
+
+    fn state_iter(&'a self) -> States<'a, Self::State>;
+}
+
 /// A collection of unique [`BasisState`]s with associated energies in units of
 /// angular frequency.
 ///
@@ -248,6 +301,18 @@ where S: Clone + Eq + Hash
     where I: IntoIterator<Item = (S, f64)>
     {
         Self { energies: iter.into_iter().collect() }
+    }
+}
+
+impl<'a, S> StateIter<'a> for Basis<S>
+where S: Clone + Eq + Hash
+{
+    type State = S;
+
+    fn num_states(&'a self) -> usize { self.energies.len() }
+
+    fn state_iter(&'a self) -> States<'a, Self::State> {
+        States { iter: self.energies.keys() }
     }
 }
 
@@ -436,6 +501,12 @@ where S: Clone + Eq + Hash
             .collect()
     }
 
+    pub fn phases_at(&self, t: f64) -> IndexMap<S, f64> {
+        self.energies.iter()
+            .map(|(s, e)| (s.clone(), *e * t))
+            .collect()
+    }
+
     /// Calculate the time dependence of the states' phases (integral of state
     /// frequencies) over an array of time coordinates.
     pub fn gen_time_dep(&self, time: &nd::Array1<f64>)
@@ -500,6 +571,18 @@ where S: Clone + Eq + Hash
     where I: IntoIterator<Item = (Vec<S>, f64)>
     {
         Self { energies: iter.into_iter().collect() }
+    }
+}
+
+impl<'a, S> StateIter<'a> for ProdBasis<S>
+where S: Clone + Eq + Hash
+{
+    type State = Vec<S>;
+
+    fn num_states(&'a self) -> usize { self.energies.len() }
+
+    fn state_iter(&'a self) -> States<'a, Self::State> {
+        States { iter: self.energies.keys() }
     }
 }
 

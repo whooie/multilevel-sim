@@ -134,7 +134,7 @@ fn doit_1beam(
                 }
             }
         );
-    let rho: nd::Array3<C64> = liouville_evolve_rk4(&rho0, &H, &time);
+    let rho: nd::Array3<C64> = liouville::evolve_t(&rho0, &H, &time);
 
     (time, rho, hbuilder0.basis().clone())
 }
@@ -275,7 +275,7 @@ fn doit_2beam(
     //             }
     //         }
     //     );
-    let rho: nd::Array3<C64> = liouville_evolve_rk4(&rho0, &H, &time);
+    let rho: nd::Array3<C64> = liouville::evolve_t(&rho0, &H, &time);
 
     // (time, rho, pulse_g0c1.basis().clone())
     (time, rho, pulse_g0c0.basis().clone())

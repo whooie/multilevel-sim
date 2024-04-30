@@ -194,7 +194,7 @@ fn doit_corpse(rabi_freq: f64, detuning: f64) -> Output {
     //             }
     //         }
     //     );
-    let rho: nd::Array3<C64> = liouville_evolve_rk4(&rho0, &H, &time);
+    let rho: nd::Array3<C64> = liouville::evolve_t(&rho0, &H, &time);
 
     Output {
         time,

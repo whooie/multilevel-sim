@@ -6,3 +6,4 @@ pub mod clock_motion;
 pub mod ququart;
 pub mod telecom;
 pub mod time_bin;
+pub mod cavity_array;

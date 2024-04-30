@@ -18,6 +18,10 @@ ndarray = "0.15.6"
 # thiserror = "*"
 anyhow = "1.0.75"
 
+[dependencies.ndarray-linalg]
+version = "0.16.0"
+features = [ "openblas-system",]
+
 [lib]
 path = "lib/lib.rs"
 name = "lib"
@@ -66,9 +70,9 @@ name = "telecom_raman"
 path = "src/time_bin.rs"
 name = "time_bin"
 
-[dependencies.ndarray-linalg]
-version = "0.16.0"
-features = [ "openblas-system",]
+[[bin]]
+path = "src/cavity_array.rs"
+name = "cavity_array"
 
 [profile.release]
 lto = true

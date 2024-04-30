@@ -56,7 +56,7 @@ fn main() {
         = hbuilder.prod_basis()
         .get_vector(&(0..N_ATOMS).map(|_| State::G0).collect::<Vec<State>>())
         .unwrap();
-    let psi: nd::Array2<C64> = schrodinger_evolve_rk4(&psi0, &H, &time);
+    let psi: nd::Array2<C64> = schrodinger::evolve_t(&psi0, &H, &time);
 
     write_npz!(
         outdir.join("rydberg_generic.npz"),

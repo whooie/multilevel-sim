@@ -53,7 +53,7 @@ fn main() {
     // let psi0: nd::Array1<C64>
     //     = hbuilder.basis()
     //     .get_vector(&State::G0).unwrap();
-    // let psi: nd::Array2<C64> = schrodinger_evolve_rk4(&psi0, &H, &time);
+    // let psi: nd::Array2<C64> = schrodinger::evolve_t(&psi0, &H, &time);
     // write_npz!(
     //     outdir.join("clock_motion.npz"),
     //     arrays: {
@@ -65,7 +65,7 @@ fn main() {
     let rho0: nd::Array2<C64>
         = hbuilder.basis()
         .get_density(&State::G0).unwrap();
-    let rho: nd::Array3<C64> = liouville_evolve_rk4(&rho0, &H, &time);
+    let rho: nd::Array3<C64> = liouville::evolve_t(&rho0, &H, &time);
     write_npz!(
         outdir.join("clock.npz"),
         arrays: {
