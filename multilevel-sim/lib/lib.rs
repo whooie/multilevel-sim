@@ -6,7 +6,7 @@ pub mod nd_utils;
 pub mod spin;
 pub mod hilbert;
 pub mod dynamics;
-pub mod dynamics_old;
 pub mod rabi;
+// pub mod dynamics_old;
 // pub mod rabi_old;
 
