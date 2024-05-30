@@ -21,6 +21,7 @@ use crate::{
 
 /// Hamiltonian builder for a collectively driven `N`-site linear array of atoms
 /// coupled to `P` cavity modes.
+#[allow(clippy::type_complexity)]
 #[derive(Clone)]
 pub struct HBuilderCavity<'a, const N: usize, const P: usize, S>
 where S: SpinState + CavityCoupling<P>

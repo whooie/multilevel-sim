@@ -31,6 +31,7 @@ use crate::{
 /// photons *not* into any of the cavity modes, and the initialization parameter
 /// `kappa` (see [`Self::new`]) gives the rate at which the photons in the
 /// cavity modes are leaked to the environment.
+#[allow(clippy::type_complexity)]
 #[derive(Clone)]
 pub struct LOperatorCavity<'a, const N: usize, const P: usize, S>
 where S: SpontaneousDecay
@@ -133,6 +134,7 @@ where S: SpontaneousDecay
 
     /// Like [`Self::decay_matrix`], but using a provided decay rate function
     /// rather than that of [`SpontaneousDecay`].
+    #[allow(clippy::obfuscated_if_else)]
     pub fn decay_matrix_with<F>(&self, f_decay: F) -> nd::Array2<f64>
     where F: Fn(&S, &S) -> Option<f64>
     {

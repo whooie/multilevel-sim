@@ -160,12 +160,8 @@ where H: HBuild<'a, S>
         if matches!(self.equal_bases(), None | Some(false)) { return None; }
         let mut gen
             = self.0.iter().map(|builder| builder.build_static());
-        let mut H //                      v guaranteed by `equal_bases` check
-            = if let Some(h) = gen.next().unwrap() {
-                h
-            } else {
-                return None;
-            };
+        let mut H //     v guaranteed by `equal_bases` check
+            = gen.next().unwrap()?;
         for maybe_h in gen {
             if let Some(h) = maybe_h {
                 superpose(&mut H, &h);
@@ -233,7 +229,7 @@ where S: SpinState + RydbergState + CavityCoupling<P>
     }
 }
 
-fn superpose_cavity<'a, const N: usize, const P: usize, S, H>(
+fn superpose_cavity<const N: usize, const P: usize, S, H>(
     A: &mut nd::Array2<C64>,
     builder_A: &H,
     B: &nd::Array2<C64>,

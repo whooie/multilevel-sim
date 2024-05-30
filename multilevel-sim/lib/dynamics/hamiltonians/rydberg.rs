@@ -69,6 +69,7 @@ impl RydbergCoupling {
 
 /// Hamiltonian builder for a driven multi-atom system including ~1/r^6 Rydberg
 /// interactions.
+#[allow(clippy::type_complexity)]
 #[derive(Clone)]
 pub struct HBuilderRydberg<'a, S>
 where S: SpinState + RydbergState

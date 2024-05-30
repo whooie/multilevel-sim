@@ -43,6 +43,7 @@ pub trait LOp<'a, S> {
 /// of angular frequency, of the `i`-th state to the `j`-th state. Any desired
 /// weighting on decay rates (e.g. Clebsch-Gordan coefficients) should be
 /// performed within the [`SpontaneousDecay`] impl.
+#[allow(clippy::type_complexity)]
 #[derive(Clone)]
 pub struct YBuilder<'a, S>
 where S: SpontaneousDecay

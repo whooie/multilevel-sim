@@ -4,7 +4,7 @@
 use std::f64::consts::TAU;
 use itertools::Itertools;
 use ndarray::{ self as nd, s, linalg::kron };
-use ndarray_linalg::{ EighInto, InverseInto, UPLO };
+use ndarray_linalg::{ EighInto, /* InverseInto, */ UPLO };
 use num_complex::Complex64 as C64;
 use num_traits::Zero;
 use rand::{ prelude as rnd, Rng };
@@ -378,9 +378,11 @@ where S: SpinState + TrappedMagic
             .expect("HBuilderMagicTrap::make_exp_ikx: error diagonalizing");
         let L = nd::Array2::from_diag(
             &evals.mapv(|lk| C64::from_polar(1.0, lk)));
-        let V = evects.clone();
-        let U = evects.inv_into()
-            .expect("HBuilderMagicTrap::make_exp_ikx: error inverting");
+        let V = evects;
+        let U = V.t().mapv(|a| a.conj());
+        // let V = evects.clone();
+        // let U = evects.inv_into()
+        //     .expect("HBuilderMagicTrap::make_exp_ikx: error inverting");
         V.dot(&L).dot(&U)
     }
 

@@ -1,4 +1,4 @@
-///! Evolution functions for the Schrödinger equation.
+//! Evolution functions for the Schrödinger equation.
 
 use super::*;
 

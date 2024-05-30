@@ -44,19 +44,19 @@ where D: nd::Dimension
     type View<'a> where Self: 'a;
     type ViewMut<'a> where Self: 'a;
 
-    fn view_time<'a>(&'a self, k: usize) -> Self::View<'a>;
-    fn view_time_mut<'a>(&'a mut self, k: usize) -> Self::ViewMut<'a>;
+    fn view_time(&self, k: usize) -> Self::View<'_>;
+    fn view_time_mut(&mut self, k: usize) -> Self::ViewMut<'_>;
 }
 
 impl TimeView<nd::Ix1> for nd::Array2<C64> {
     type View<'a> = nd::ArrayView1<'a, C64> where Self: 'a;
     type ViewMut<'a> = nd::ArrayViewMut1<'a, C64> where Self: 'a;
 
-    fn view_time<'a>(&'a self, k: usize) -> Self::View<'a> {
+    fn view_time(&self, k: usize) -> Self::View<'_> {
         self.slice(s![.., k])
     }
 
-    fn view_time_mut<'a>(&'a mut self, k: usize) -> Self::ViewMut<'a> {
+    fn view_time_mut(&mut self, k: usize) -> Self::ViewMut<'_> {
         self.slice_mut(s![.., k])
     }
 }
@@ -65,11 +65,11 @@ impl TimeView<nd::Ix2> for nd::Array3<C64> {
     type View<'a> = nd::ArrayView2<'a, C64> where Self: 'a;
     type ViewMut<'a> = nd::ArrayViewMut2<'a, C64> where Self: 'a;
 
-    fn view_time<'a>(&'a self, k: usize) -> Self::View<'a> {
+    fn view_time(&self, k: usize) -> Self::View<'_> {
         self.slice(s![.., .., k])
     }
 
-    fn view_time_mut<'a>(&'a mut self, k: usize) -> Self::ViewMut<'a> {
+    fn view_time_mut(&mut self, k: usize) -> Self::ViewMut<'_> {
         self.slice_mut(s![.., .., k])
     }
 }
@@ -303,7 +303,7 @@ impl<'a, S> Density<'a, S> {
             Self::Array(a) => {
                 let norm = a.norm();
                 (
-                    a.shape() == &[basis.num_states(); 2]
+                    a.shape() == [basis.num_states(); 2]
                     && a.diag().iter().all(|p| p.im == 0.0 && p.re >= 0.0)
                     && norm != 0.0.into()
                     && a == a.t().mapv(|p| p.conj())

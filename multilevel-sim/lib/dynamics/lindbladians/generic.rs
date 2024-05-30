@@ -16,6 +16,7 @@ use crate::{
 ///
 /// Any desired weighting on decay rates (e.g. Clebsch-Gordan coefficients)
 /// should be done within the [`SpontaneousDecay`] impl.
+#[allow(clippy::type_complexity)]
 #[derive(Clone)]
 pub struct LOperator<'a, S>
 where S: SpontaneousDecay
