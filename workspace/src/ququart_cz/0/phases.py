@@ -1,7 +1,7 @@
 from pathlib import Path
 import numpy as np
 import whooie.pyplotdefs as pd
-pd.pp.rcParams["legend.handlelength"] = 3.0
+pd.pp.rcParams["legend.handlelength"] = 2.8
 FS = pd.pp.rcParams["figure.figsize"]
 pd.pp.rcParams["figure.figsize"] = [FS[0], FS[1] * 0.65]
 pd.set_font("/usr/share/fonts/OTF/MyriadPro-Regular.otf", "MyriadPro")
@@ -215,6 +215,11 @@ state_labels = [
     "C1C1",
 ]
 
+def slabel(s: str) -> str:
+    s0 = s[:2].replace("G", "0").replace("C", "1")
+    s1 = s[2:].replace("G", "0").replace("C", "1")
+    return f"|{s0}\\rangle \\otimes |{s1}\\rangle"
+
 def dashes(idx: int) -> list[float]:
     binstr = f"{bin(idx)[2:]:>04}"
     return [6, 1] + [
@@ -265,7 +270,8 @@ for (k, (Wk, detk, xik, optk)) in it:
                     detk, (2 * data[k, :, j + 2] - np.pi) / np.pi,
                     marker="", linestyle="-", color="C0", alpha=opacity,
                     dashes=dashes(j),
-                    label=f"2φ$_{{\\mathregular{{{statej}}}}}$ - π",
+                    label=f"2φ$_{{{slabel(statej)}}}$ - π",
+                    # label=f"2φ$_{{\\mathregular{{{statej}}}}}$ - π",
                 )
                 .plot(
                     detk, (2 * data[k, :, j + 2] - np.pi) / np.pi,
@@ -284,7 +290,8 @@ for (k, (Wk, detk, xik, optk)) in it:
                     detk, data[k, :, j + 2] / np.pi,
                     marker="", linestyle="-", color="C1", alpha=opacity,
                     dashes=dashes(j),
-                    label=f"φ$_{{\\mathregular{{{statej}}}}}$",
+                    label=f"φ$_{{{slabel(statej)}}}$",
+                    # label=f"φ$_{{\\mathregular{{{statej}}}}}$",
                 )
                 .plot(
                     detk, data[k, :, j + 2] / np.pi,
@@ -303,7 +310,8 @@ for (k, (Wk, detk, xik, optk)) in it:
                     detk, data[k, :, j + 2] / np.pi,
                     marker="", linestyle="-", color="C3", alpha=opacity,
                     dashes=dashes(j),
-                    label=f"φ$_{{\\mathregular{{{statej}}}}}$",
+                    label=f"φ$_{{{slabel(statej)}}}$",
+                    # label=f"φ$_{{\\mathregular{{{statej}}}}}$",
                 )
                 .plot(
                     detk, data[k, :, j + 2] / np.pi,
