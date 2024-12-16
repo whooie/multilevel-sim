@@ -7,3 +7,4 @@ pub mod ququart;
 pub mod telecom;
 pub mod time_bin;
 pub mod cavity_array;
+pub mod motion_simple;

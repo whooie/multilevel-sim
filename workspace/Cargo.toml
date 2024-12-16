@@ -17,6 +17,7 @@ ndarray = "0.15.6"
 # rmpfit = "*"
 # thiserror = "*"
 anyhow = "1.0.75"
+rayon = "1.10.0"
 
 [dependencies.ndarray-linalg]
 version = "0.16.0"
@@ -73,6 +74,14 @@ name = "time_bin"
 [[bin]]
 path = "src/cavity_array.rs"
 name = "cavity_array"
+
+[[bin]]
+path = "src/motion_simple.rs"
+name = "motion_simple"
+
+[[bin]]
+path = "src/motion_simple_optim.rs"
+name = "motion_simple_optim"
 
 [profile.release]
 lto = true
