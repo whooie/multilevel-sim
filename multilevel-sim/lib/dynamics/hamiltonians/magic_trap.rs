@@ -94,7 +94,7 @@ where S: SpinState + TrappedMagic
     /// To keep the ratio ħω/kT invariant, temperature should be provided in
     /// units that are commensurate with those used for frequency/energy: For
     /// units where `10^n ħ = 1`, the temperature should be provided in units
-    /// where `10^n = 1` (i.e. units of `10^n K`). To likewise keep the
+    /// where `10^n k = 1` (i.e. units of `10^n K`). To likewise keep the
     /// Lamb-Dicke parameter invariant, the atomic mass should be provided
     /// in units where `10^-n = 1` (i.e. units of `10^-n kg`). The wavelength
     /// should be in meters.

@@ -525,13 +525,13 @@ where
     for (k, ((&dtk, &dtkp1), ((hk, hkp1), hkp2))) in iter {
         k1 = rhs(hk, &z_old);
         k2 = rhs(hkp1, &(&z_old + &k1 * dtk));
-        k3 = rhs(hkp1, &(&z_old * &k2 * dtk));
-        k4 = rhs(hkp2, &(&z_old * &k3 * (dtk + dtkp1)));
+        k3 = rhs(hkp1, &(&z_old + &k2 * dtk));
+        k4 = rhs(hkp2, &(&z_old + &k3 * (dtk + dtkp1)));
         z_new
-            = &z_old * (k1 + k2 * 2.0 + k3 * 2.0 + k4) * ((dtk + dtkp1) / 6.0);
+            = &z_old + (k1 + k2 * 2.0 + k3 * 2.0 + k4) * ((dtk + dtkp1) / 6.0);
         norm = z_new.norm();
         z_old = z_new / norm;
-        z_old.clone().move_into(z.view_time_mut(k));
+        z_old.clone().move_into(z.view_time_mut(k + 2));
     }
     for k in (1..n - 1).step_by(2) {
         z_new = (&z.view_time(k - 1) + &z.view_time(k + 1)) / 2.0;
@@ -593,7 +593,7 @@ where
         z_new = &z_old + (k1 + k2 * 2.0 + k3 * 2.0 + k4) * (dtk / 6.0);
         norm = z_new.norm();
         z_old = z_new / norm;
-        z_old.clone().move_into(z.view_time_mut(k));
+        z_old.clone().move_into(z.view_time_mut(k + 2));
     }
     z
 }
@@ -676,8 +676,8 @@ where
         hkp1 = h(tk + dtk);
         k1 = rhs(&hk, &z_old);
         k2 = rhs(&hkp1h, &(&z_old + &k1 * (dtk / 2.0)));
-        k3 = rhs(&hkp1h, &(&z_old * &k2 * (dtk / 2.0)));
-        k4 = rhs(&hkp1, &(&z_old * &k3 * dtk));
+        k3 = rhs(&hkp1h, &(&z_old + &k2 * (dtk / 2.0)));
+        k4 = rhs(&hkp1, &(&z_old + &k3 * dtk));
         z_new = &z_old + (k1 + k2 * 2.0 + k3 * 2.0 + k4) * (dtk / 6.0);
         norm = z_new.norm();
         z_new /= norm;
