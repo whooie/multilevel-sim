@@ -205,8 +205,11 @@ fn phase_diagram_spinchain() -> Data {
 #[derive(Clone, Debug)]
 struct TimeData {
     time: nd::Array1<f64>,
-    rho: nd::Array3<C64>,
+    nbar: nd::Array1<f64>,
+    szbar: nd::Array1<f64>,
 }
+
+type SpCav = Cavity<NATOMS, 1, HSpin>;
 
 fn time_evolve_spinchain() -> TimeData {
     const TMAX: f64 = 5.0;
@@ -227,24 +230,44 @@ fn time_evolve_spinchain() -> TimeData {
     let loperator: LOperatorTransverseIsing<NATOMS>
         = LOperatorTransverseIsing::new(&hbuilder, gamma, kappa);
 
-    fn rho0(si: &Cavity<NATOMS, 1, HSpin>, sj: &Cavity<NATOMS, 1, HSpin>) -> C64
-    {
+    let rho0 = |si: &SpCav, sj: &SpCav| -> C64 {
         if si.atomic_states().iter().all(|s| s == &HSpin::Up)
             && si.photons()[0] == 3
-            && sj.atomic_states().iter().all(|s| s == &HSpin::Up)
-            && sj.photons()[0] == 3
+            && sj == si
         {
             1.0.into()
         } else {
             0.0.into()
         }
-    }
+    };
+
+    let meas = |state: &nd::Array2<C64>| -> (f64, f64) {
+        hbuilder.basis().keys()
+            .zip(state.diag())
+            .map(|(Cavity(ss, [n]), p)| {
+                let prob = p.norm();
+                (
+                    prob * (*n as f64),
+                    prob * ss.iter()
+                        .map(|sk| sk.sz())
+                        .sum::<f64>() / NATOMS as f64,
+                )
+            })
+            .fold((0.0, 0.0), |(n0, sz0), (n, sz)| (n0 + n, sz0 + sz))
+    };
 
     let time: nd::Array1<f64> = nd::Array1::linspace(0.0, TMAX, NT);
-    let rho: nd::Array3<C64>
-        = lindblad::evolve_with(rho0, &hbuilder, &loperator, &time)
-        .unwrap();
-    TimeData { time, rho }
+    let (nbar, szbar): (Vec<f64>, Vec<f64>)
+        = lindblad::evolve_reduced_with(
+            rho0, &hbuilder, &loperator, &time, meas)
+        .unwrap()
+        .into_iter()
+        .unzip();
+    TimeData {
+        time,
+        nbar: nd::Array::from_vec(nbar),
+        szbar: nd::Array::from_vec(szbar),
+    }
 }
 
 fn main() -> anyhow::Result<()> {
@@ -264,12 +287,13 @@ fn main() -> anyhow::Result<()> {
     //     }
     // );
 
-    let TimeData { time, rho } = time_evolve_spinchain();
+    let TimeData { time, nbar, szbar } = time_evolve_spinchain();
     write_npz!(
         outdir.join("time_evolve_spinchain.npz"),
         arrays: {
             "time" => &time,
-            "rho" => &rho,
+            "nbar" => &nbar,
+            "szbar" => &szbar,
             "natoms" => &nd::array![NATOMS as u32],
             "nmax" => &nd::array![MAX_PHOTONS as u32],
             // "omega_z" => &nd::array![omega_z],
