@@ -377,7 +377,8 @@ fn grad_ascent(
     init_learning_param: f64,
     eps: f64,
     maxiters: usize,
-) -> GradResult {
+) -> GradResult
+{
     let z = (maxiters as f64).log10().floor() as usize + 1;
     let mut last = init;
     let mut last_grad = compute_grad(init, step);

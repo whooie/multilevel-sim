@@ -83,6 +83,10 @@ name = "motion_simple"
 path = "src/motion_simple_optim.rs"
 name = "motion_simple_optim"
 
+[[bin]]
+path = "src/quoct_ccz_optim.rs"
+name = "quoct_ccz_optim"
+
 [profile.release]
 lto = true
 panic = "abort"
