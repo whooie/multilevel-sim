@@ -4,7 +4,18 @@ use multilevel_sim::{
     spin::Spin,
 };
 
-pub const TRAP_FREQ: f64 = 30e-3; // MHz
+pub const TRAP_FREQ: f64 = 10e-3; // MHz
+// pub const TRAP_FREQ: f64 = 30e-3; // MHz
+// pub const TRAP_FREQ: f64 = 50e-3; // MHz
+// pub const TRAP_FREQ: f64 = 70e-3; // MHz
+// pub const TRAP_FREQ: f64 = 90e-3; // MHz
+// pub const TRAP_FREQ: f64 = 100e-3; // MHz
+// pub const TRAP_FREQ: f64 = 200e-3; // MHz
+// pub const TRAP_FREQ: f64 = 400e-3; // MHz
+// pub const TRAP_FREQ: f64 = 800e-3; // MHz
+// pub const TRAP_FREQ: f64 = 1000e-3; // MHz
+// pub const TRAP_FREQ: f64 = 0.400; // MHz
+// pub const TRAP_FREQ: f64 = 2.0; // MHz
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum State {
