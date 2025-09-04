@@ -5,44 +5,48 @@ from pathlib import Path
 import sys
 
 outdir = Path("output")
-infile = outdir.joinpath("motion_simple.npz")
+infile = outdir.joinpath("quoct_mpp.npz")
 
 data = np.load(str(infile))
 time = data["time"]
-rho = data["rho"]
-rho_diag = rho[list(range(rho.shape[0])), list(range(rho.shape[0])), :]
+psi = data["psi"]
 tmark = data["tmark"]
+x_avg = data["x_avg"]
+p_avg = data["p_avg"]
 
-atom_states = ["G", "E"]
-nfock = rho.shape[0] // len(atom_states)
+atom_states = ["G0", "G1", "E0", "E1"]
+nfock = psi.shape[0] // len(atom_states)
 
 P = pd.Plotter()
 for t0 in tmark:
     P.axvline(t0, color="k")
 for (k, (a, n)) in enumerate(product(atom_states, range(nfock))):
-    P.plot(time, rho_diag[k, :].real, label=f"∣{a},{n}⟩")
+    P.plot(time, np.abs(psi[k, :]) ** 2, label=f"∣{a},{n}⟩")
 (
     P
     .ggrid()
-    .legend(
-        fontsize="xx-small",
-        frameon=False,
-        loc="upper left",
-        bbox_to_anchor=(1.0, 1.0),
-        framealpha=1.0,
-    )
+    .llegend()
     .set_ylim(-0.05, 1.05)
     .set_xlabel("Time [μs]")
     .set_ylabel("Probability")
-    .savefig(outdir.joinpath("motion_simple.png"))
+    .savefig(outdir.joinpath("quoct_mpp.png"))
+    .close()
 )
 
-selector_G = np.array([
-    1.0 if a == "G" else 0.0
+selector_G0 = np.array([
+    1.0 if a == "G0" else 0.0
     for (a, n) in product(atom_states, range(nfock))
 ])
-selector_E = np.array([
-    1.0 if a == "E" else 0.0
+selector_G1 = np.array([
+    1.0 if a == "G1" else 0.0
+    for (a, n) in product(atom_states, range(nfock))
+])
+selector_E0 = np.array([
+    1.0 if a == "E0" else 0.0
+    for (a, n) in product(atom_states, range(nfock))
+])
+selector_E1 = np.array([
+    1.0 if a == "E1" else 0.0
     for (a, n) in product(atom_states, range(nfock))
 ])
 selector_nbar = np.array([
@@ -50,25 +54,24 @@ selector_nbar = np.array([
     for (a, n) in product(atom_states, range(nfock))
 ])
 
-P_G = rho_diag.T @ selector_G
-P_E = rho_diag.T @ selector_E
-nbar = rho_diag.T @ selector_nbar
+psi2 = (np.abs(psi.T) ** 2).real
+P_G0 = psi2 @ selector_G0
+P_G1 = psi2 @ selector_G1
+P_E0 = psi2 @ selector_E0
+P_E1 = psi2 @ selector_E1
+nbar = psi2 @ selector_nbar
 
 P = pd.Plotter()
 for t0 in tmark:
     P.axvline(t0, color="k")
 (
     P
-    .plot(time, P_G.real, label="∣g⟩")
-    .plot(time, P_E.real, label="∣e⟩")
+    .plot(time, P_G0, label="∣g0⟩")
+    .plot(time, P_G1, label="∣g1⟩")
+    .plot(time, P_E0, label="∣e0⟩")
+    .plot(time, P_E1, label="∣e1⟩")
     .ggrid()
-    .legend(
-        fontsize="xx-small",
-        frameon=False,
-        loc="upper left",
-        bbox_to_anchor=(1.0, 1.0),
-        framealpha=1.0,
-    )
+    .llegend()
     .set_ylim(-0.05, 1.05)
     .set_xlabel("Time [μs]")
     .set_ylabel("Probability")
@@ -85,8 +88,6 @@ for t0 in tmark:
     .set_ylabel("$\\bar{n}$")
 )
 
-x_avg = data["x_avg"]
-p_avg = data["p_avg"]
 (
     pd.Plotter()
     .plot(x_avg.real, p_avg.real, marker="", ls="-")
@@ -95,4 +96,5 @@ p_avg = data["p_avg"]
 )
 
 pd.show()
+
 

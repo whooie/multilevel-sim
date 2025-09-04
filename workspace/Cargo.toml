@@ -18,6 +18,7 @@ ndarray = "0.15.6"
 # thiserror = "*"
 anyhow = "1.0.75"
 rayon = "1.10.0"
+num-traits = "0.2.19"
 
 [dependencies.ndarray-linalg]
 version = "0.16.0"
@@ -84,8 +85,16 @@ path = "src/motion_simple_optim.rs"
 name = "motion_simple_optim"
 
 [[bin]]
+path = "src/quoct.rs"
+name = "quoct"
+
+[[bin]]
 path = "src/quoct_ccz_optim.rs"
 name = "quoct_ccz_optim"
+
+[[bin]]
+path = "src/quoct_mpp.rs"
+name = "quoct_mpp"
 
 [profile.release]
 lto = true

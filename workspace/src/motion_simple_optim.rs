@@ -1,5 +1,6 @@
 #![allow(dead_code, non_snake_case, non_upper_case_globals)]
 #![allow(unused_imports, unused_variables, unused_mut)]
+#![allow(static_mut_refs)]
 
 use std::{
     f64::consts::{ PI, TAU },
@@ -19,10 +20,81 @@ use multilevel_sim::{
 use rayon::iter::{ IntoParallelIterator, ParallelIterator };
 use lib::systems::motion_simple::*;
 
-const M: f64 = 2.8384644058191703e-25; // kg
-const WL: f64 = 578e-9; // m
+// const M: f64 = 2.8384644058191703e-25; // kg, 171Yb
+// const WL: f64 = 578e-9; // m
+const M: f64 = 5.00823449476748e-27; // kg, 3He
+const WL: f64 = 1083e-9 / 2.0; // m
 const NMAX: usize = 2;
-const RABI_FREQ: f64 = 0.1e-3; // MHz
+// const RABI_FREQ: f64 = 0.01e-3; // MHz
+// const RABI_FREQ: f64 = 0.03e-3; // MHz
+// const RABI_FREQ: f64 = 0.05e-3; // MHz
+// const RABI_FREQ: f64 = 0.1e-3; // MHz
+// const RABI_FREQ: f64 = 0.3e-3; // MHz
+// const RABI_FREQ: f64 = 0.5e-3; // MHz
+// const RABI_FREQ: f64 = 0.6e-3; // MHz
+// const RABI_FREQ: f64 = 0.7e-3; // MHz
+// const RABI_FREQ: f64 = 0.8e-3; // MHz
+// const RABI_FREQ: f64 = 1.0e-3; // MHz
+// const RABI_FREQ: f64 = 1.2e-3; // MHz
+// const RABI_FREQ: f64 = 2.0e-3; // MHz
+// const RABI_FREQ: f64 = 3.0e-3; // MHz
+// const RABI_FREQ: f64 = 5.0e-3; // MHz
+const RABI_FREQ: f64 = 6.0e-3; // MHz
+// const RABI_FREQ: f64 = 8.0e-3; // MHz
+// const RABI_FREQ: f64 = 10.0e-3; // MHz
+// const RABI_FREQ: f64 = 30.0e-3; // MHz
+// const RABI_FREQ: f64 = 50.0e-3; // MHz
+// const RABI_FREQ: f64 = 1000.0e-3; // MHz
+const NSCAN: Option<usize> = None;
+// const NSCAN: Option<usize> = Some(5);
+const MAXITERS: usize = 500;
+// const MAXITERS: usize = 1000000;
+
+const INIT: Params =
+    /* e-m swap */
+    // Params {
+    //     th0: 2.227479747,
+    //     ph0: 4.060074462,
+    //     th1: 2.227479747,
+    //     ph1: 2.227479747,
+    //     th2: 2.227479747,
+    //     ph2: 4.060074462,
+    // };
+    /* e-m shelve */
+    // Params {
+    //     th0: 1.350960250,
+    //     ph0: 5.791430000,
+    //     th1: 4.972480000,
+    //     ph1: 3.894360000,
+    //     th2: 0.3972259667,
+    //     ph2: 1.439294750,
+    // };
+    /* e-m CZ */
+    // Params {
+    //     th0: 4.79093,
+    //     ph0: 1.49226,
+    //     th1: 4.79093,
+    //     ph1: 5.89049,
+    //     th2: 4.79093,
+    //     ph2: 3.69137,
+    // };
+    /* test */
+    // Params {
+    //     th0: 7.159683,
+    //     ph0: 3.086141,
+    //     th1: 7.159683,
+    //     ph1: 4.538249,
+    //     th2: 2.545468,
+    //     ph2: 0.574563,
+    // };
+    Params {
+        th0: 6.283185,
+        ph0: 0.196350,
+        th1: 0.196350,
+        ph1: 1.718058,
+        th2: 0.196350,
+        ph2: 6.283185,
+    };
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 struct Params {
@@ -133,7 +205,7 @@ impl std::fmt::LowerExp for Params {
     }
 }
 
-fn do_sim(params: Params, init: &nd::Array1<C64>) -> nd::Array1<C64> {
+fn make_unitary(params: Params) -> nd::Array2<C64> {
     let basis: Basis<State> =
         [(State::G, 0.0), (State::E, 0.0)]
         .into_iter()
@@ -153,8 +225,8 @@ fn do_sim(params: Params, init: &nd::Array1<C64>) -> nd::Array1<C64> {
     let frequency: f64 =
         basis.get_energy(&State::E).unwrap()
         - basis.get_energy(&State::G).unwrap()
-        // - State::TRAP_FREQ;
-        + State::TRAP_FREQ;
+        - State::TRAP_FREQ; // emswap and emcz
+        // + State::TRAP_FREQ; // emshelve
     // √3 from a CG coefficient
     // 1.060 from a carrier Rabi frequency calibration
     // 2.9 from using a sideband
@@ -199,99 +271,172 @@ fn do_sim(params: Params, init: &nd::Array1<C64>) -> nd::Array1<C64> {
     let hbuilder2 =
         HBuilderMagicTrap::new(&basis, drive2, polarization, motion);
 
-    let dt = (TAU / State::TRAP_FREQ).min(1.0 / RABI_FREQ) / 10.0;
+    let dt = (TAU / State::TRAP_FREQ).min(1.0 / RABI_FREQ) / 30.0;
     let nsteps = (t3 / dt).ceil() as usize;
     let time: nd::Array1<f64> = nd::Array1::linspace(0.0, t3, nsteps + 1);
     let H: nd::Array3<C64> =
         hbuilder0.gen(&time)
         + hbuilder1.gen(&time)
         + hbuilder2.gen(&time);
-    let psi: nd::Array2<C64> = schrodinger::evolve_t(init, &H, &time);
-    psi.slice(nd::s![.., nsteps]).to_owned()
-}
 
-fn make_unitary(params: Params) -> nd::Array2<C64> {
     const ATOM_STATES: &[State] = &[State::G, State::E];
     let uni_size: usize = ATOM_STATES.len() * (NMAX + 1);
     let mut uni: nd::Array2<C64> = nd::Array2::zeros((uni_size, uni_size));
-    for (k, col) in uni.columns_mut().into_iter().enumerate() {
+    for (k, mut col) in uni.columns_mut().into_iter().enumerate() {
         let init: nd::Array1<C64> =
             (0..uni_size)
             .map(|j| if j == k { C64::from(1.0) } else { C64::from(0.0) })
             .collect();
-        do_sim(params, &init).move_into(col);
+        let psi: nd::Array2<C64> = schrodinger::evolve_t(&init, &H, &time);
+        col.assign(&psi.slice(nd::s![.., nsteps]));
     }
     uni
 }
 
+#[derive(Clone, Debug, PartialEq)]
+struct TargetDiags {
+    k: usize,
+    elems: [C64; 4],
+}
+
+impl TargetDiags {
+    fn new(ph_e: f64, ph_m: f64) -> Self {
+        let elems =
+            [
+                C64::from(1.0),
+                C64::cis(ph_m),
+                C64::cis(ph_e),
+                C64::cis(ph_e + ph_m),
+            ];
+        Self { k: 3, elems }
+    }
+}
+
+impl Iterator for TargetDiags {
+    type Item = [C64; 4];
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if !(0..4).contains(&self.k) { return None; }
+        // if self.k > 0 { self.elems[self.k - 1] *= -1.0; }
+        self.elems[self.k] *= -1.0;
+        self.k += 1;
+        Some(self.elems)
+    }
+}
+
+impl ExactSizeIterator for TargetDiags {
+    fn len(&self) -> usize { 4 - self.k }
+}
+
+impl std::iter::FusedIterator for TargetDiags { }
+
 fn fidelity_phase(uni: &nd::Array2<C64>, ph_e: f64, ph_m: f64) -> f64 {
     /* e<->m swap */
-    // don't care about what happens to any of the n=2 states
-    // let aph = C64::cis(ph_e);
-    // let bph = C64::cis(ph_m);
-    // let abph = C64::cis(ph_e + ph_m);
-    // let tr =
-    //     uni[[0, 0]]
-    //     + bph * uni[[1, 3]]
-    //     + aph * uni[[3, 1]]
-    //     + abph * uni[[4, 4]];
-    // tr.norm() / 4.0
-
-    /* e-m shelve */
-    // don't care about what happens to the g,2 state
+    /* don't care about what happens to any of the n=2 states */
     let aph = C64::cis(ph_e);
     let bph = C64::cis(ph_m);
     let abph = C64::cis(ph_e + ph_m);
-    let a2bph = C64::cis(ph_e + 2.0 * ph_m);
     let tr =
         uni[[0, 0]]
-        + bph * uni[[1, 5]]
-        + a2bph * uni[[5, 1]]
-        + aph * uni[[3, 3]]
+        + bph * uni[[1, 3]]
+        + aph * uni[[3, 1]]
         + abph * uni[[4, 4]];
-    tr.norm() / 5.0
+    tr.norm() / 4.0
+
+    /* e-m shelve */
+    /* don't care about what happens to the g,2 state */
+    // let aph = C64::cis(ph_e);
+    // let bph = C64::cis(ph_m);
+    // let abph = C64::cis(ph_e + ph_m);
+    // let a2bph = C64::cis(ph_e + 2.0 * ph_m);
+    // let tr =
+    //     uni[[0, 0]]
+    //     + bph * uni[[1, 5]]
+    //     + a2bph * uni[[5, 1]]
+    //     + aph * uni[[3, 3]]
+    //     + abph * uni[[4, 4]];
+    // tr.norm() / 5.0
+
+    /* e-m CZ */
+    /* don't care about what happens to any of the n=2 states */
+    // let diag = uni.diag();
+    // TargetDiags::new(ph_e, ph_m)
+    //     .map(|targ| {
+    //         diag.iter().enumerate()
+    //         .filter_map(|(k, u)| (k % (NMAX + 1) < 2).then_some(u))
+    //         .zip(targ)
+    //         .map(|(u, t)| *u * t)
+    //         .sum::<C64>()
+    //         .norm()
+    //     })
+    //     .max_by(|l, r| l.total_cmp(r))
+    //     .unwrap()
+    //     / 4.0
 }
 
 fn fidelity_phase_grad(uni: &nd::Array2<C64>, ph_e: f64, ph_m: f64) -> (f64, f64) {
     /* e<->m swap */
-    // let aph = C64::cis(ph_e);
-    // let bph = C64::cis(ph_m);
-    // let abph = C64::cis(ph_e + ph_m);
-    // let tr =
-    //     uni[[0, 0]]
-    //     + bph * uni[[1, 3]]
-    //     + aph * uni[[3, 1]]
-    //     + abph * uni[[4, 4]];
-    // let fid = tr.norm() / 4.0;
-    // let grad_ph_e =
-    //     -((aph * uni[[3, 1]] + abph * uni[[4, 4]]) * tr.conj()).im / 16.0 / fid;
-    // let grad_ph_m =
-    //     -((bph * uni[[1, 3]] + abph * uni[[4, 4]]) * tr.conj()).im / 16.0 / fid;
-    // (grad_ph_e, grad_ph_m)
-
-    /* e-m shelve */
     let aph = C64::cis(ph_e);
     let bph = C64::cis(ph_m);
     let abph = C64::cis(ph_e + ph_m);
-    let a2bph = C64::cis(ph_e + 2.0 * ph_m);
     let tr =
         uni[[0, 0]]
-        + bph * uni[[1, 5]]
-        + a2bph * uni[[5, 1]]
-        + aph * uni[[3, 3]]
+        + bph * uni[[1, 3]]
+        + aph * uni[[3, 1]]
         + abph * uni[[4, 4]];
-    let fid = tr.norm() / 5.0;
+    let fid = tr.norm() / 4.0;
     let grad_ph_e =
-        -(
-            (a2bph * uni[[5, 1]] + aph * uni[[3, 3]] + abph * uni[[4, 4]])
-            * tr.conj()
-        ).im / 25.0 / fid;
+        -((aph * uni[[3, 1]] + abph * uni[[4, 4]]) * tr.conj()).im / 16.0 / fid;
     let grad_ph_m =
-        -(
-            (bph * uni[[1, 5]] + 2.0 * a2bph * uni[[5, 1]] + abph * uni[[4, 4]])
-            * tr.conj()
-        ).im / 25.0 / fid;
+        -((bph * uni[[1, 3]] + abph * uni[[4, 4]]) * tr.conj()).im / 16.0 / fid;
     (grad_ph_e, grad_ph_m)
+
+    /* e-m shelve */
+    // let aph = C64::cis(ph_e);
+    // let bph = C64::cis(ph_m);
+    // let abph = C64::cis(ph_e + ph_m);
+    // let a2bph = C64::cis(ph_e + 2.0 * ph_m);
+    // let tr =
+    //     uni[[0, 0]]
+    //     + bph * uni[[1, 5]]
+    //     + a2bph * uni[[5, 1]]
+    //     + aph * uni[[3, 3]]
+    //     + abph * uni[[4, 4]];
+    // let fid = tr.norm() / 5.0;
+    // let grad_ph_e =
+    //     -(
+    //         (a2bph * uni[[5, 1]] + aph * uni[[3, 3]] + abph * uni[[4, 4]])
+    //         * tr.conj()
+    //     ).im / 25.0 / fid;
+    // let grad_ph_m =
+    //     -(
+    //         (bph * uni[[1, 5]] + 2.0 * a2bph * uni[[5, 1]] + abph * uni[[4, 4]])
+    //         * tr.conj()
+    //     ).im / 25.0 / fid;
+    // (grad_ph_e, grad_ph_m)
+
+    /* e-m CZ */
+    // let diag = uni.diag();
+    // let (targ, tr, fid): ([C64; 4], C64, f64) =
+    //     TargetDiags::new(ph_e, ph_m)
+    //         .map(|targ| {
+    //             let tr: C64 =
+    //                 diag.iter().enumerate()
+    //                 .filter_map(|(k, u)| (k % (NMAX + 1) < 2).then_some(u))
+    //                 .zip(targ)
+    //                 .map(|(u, t)| *u * t)
+    //                 .sum();
+    //             let fid = tr.norm() / 4.0;
+    //             (targ, tr, fid)
+    //         })
+    //         .max_by(|(_, _, l), (_, _, r)| l.total_cmp(r))
+    //         .unwrap();
+    // // note that len(diag) != len(targ)
+    // let grad_ph_e =
+    //     -((targ[2] * diag[3] + targ[3] * diag[4]) * tr.conj()).im / 16.0 / fid;
+    // let grad_ph_m =
+    //     -((targ[1] * diag[1] + targ[3] * diag[4]) * tr.conj()).im / 16.0 / fid;
+    // (grad_ph_e, grad_ph_m)
 }
 
 #[allow(unused_variables)]
@@ -321,7 +466,7 @@ fn fidelity(params: Params) -> (f64, f64, f64) {
         a += GAMMA * grad_a;
         b += GAMMA * grad_b;
     }
-    panic!("fidelity calculation did not converge!");
+    panic!("fidelity calculation did not converge!\n{a}\n{b}");
 }
 
 fn compute_grad(cur: Params, step: Params) -> Params {
@@ -331,24 +476,30 @@ fn compute_grad(cur: Params, step: Params) -> Params {
             th1: 0.0, ph1: 0.0,
             th2: 0.0, ph2: 0.0,
         };
-    let th0p = fidelity(cur.step_th0( step.th0)).0;
-    let th0m = fidelity(cur.step_th0(-step.th0)).0;
-    grad.th0 = (th0p - th0m) / (2.0 * step.th0);
-    let ph0p = fidelity(cur.step_ph0( step.ph0)).0;
-    let ph0m = fidelity(cur.step_ph0(-step.ph0)).0;
-    grad.ph0 = (ph0p - ph0m) / (2.0 * step.ph0);
-    let th1p = fidelity(cur.step_th1( step.th1)).0;
-    let th1m = fidelity(cur.step_th1(-step.th1)).0;
-    grad.th1 = (th1p - th1m) / (2.0 * step.th1);
-    let ph1p = fidelity(cur.step_ph1( step.ph1)).0;
-    let ph1m = fidelity(cur.step_ph1(-step.ph1)).0;
-    grad.ph1 = (ph1p - ph1m) / (2.0 * step.ph1);
-    let th2p = fidelity(cur.step_th2( step.th2)).0;
-    let th2m = fidelity(cur.step_th2(-step.th2)).0;
-    grad.th2 = (th2p - th2m) / (2.0 * step.th2);
-    let ph2p = fidelity(cur.step_ph2( step.ph2)).0;
-    let ph2m = fidelity(cur.step_ph2(-step.ph2)).0;
-    grad.ph2 = (ph2p - ph2m) / (2.0 * step.ph2);
+    let steps: Vec<f64> =
+        [
+            cur.step_th0( step.th0),
+            cur.step_th0(-step.th0),
+            cur.step_ph0( step.ph0),
+            cur.step_ph0(-step.ph0),
+            cur.step_th1( step.th0),
+            cur.step_th1(-step.th0),
+            cur.step_ph1( step.ph0),
+            cur.step_ph1(-step.ph0),
+            cur.step_th2( step.th0),
+            cur.step_th2(-step.th0),
+            cur.step_ph2( step.ph0),
+            cur.step_ph2(-step.ph0),
+        ]
+        .into_par_iter()
+        .map(|params| fidelity(params).0)
+        .collect();
+    grad.th0 = (steps[ 0] - steps[ 1]) / (2.0 * step.th0);
+    grad.ph0 = (steps[ 2] - steps[ 3]) / (2.0 * step.ph0);
+    grad.th1 = (steps[ 4] - steps[ 5]) / (2.0 * step.th1);
+    grad.ph1 = (steps[ 6] - steps[ 7]) / (2.0 * step.ph1);
+    grad.th2 = (steps[ 8] - steps[ 9]) / (2.0 * step.th2);
+    grad.ph2 = (steps[10] - steps[11]) / (2.0 * step.ph2);
     grad
 }
 
@@ -385,17 +536,21 @@ fn grad_ascent(
     let mut cur = init;
     let mut cur_grad = last_grad;
     let mut gamma = init_learning_param;
+    let mut tau0: f64 = 2.0 * cur.th0 / TAU / RABI_FREQ;
+    let mut tau1: f64 = 2.0 * cur.th1 / TAU / RABI_FREQ;
+    let mut tau2: f64 = 2.0 * cur.th2 / TAU / RABI_FREQ;
 
-    eprintln!("\n\n");
+    eprintln!("\n\n\n");
     for k in 0..maxiters {
         let fid = fidelity(cur).0;
+        eprint!("\r\x1b[4A");
+        eprintln!("  {:w$} / {} : F = {:.9}, γ = {:.3e}  ", k + 1, maxiters, fid, gamma, w=z);
+        eprintln!("  grad : {:+10.3e}  ", cur_grad);
+        eprintln!("   cur : {:+10.3e}  ", cur);
+        eprintln!("  time : {:.3} ms  ", (tau0 + tau1 + tau2) / 1000.0);
         if (1.0 - fid).abs() < eps {
             return GradResult::Converged(cur);
         }
-        eprint!("\r\x1b[3A");
-        eprintln!("  {:w$} / {} : F = {:.9}, γ = {:.3e}", k, maxiters, fid, gamma, w=z);
-        eprintln!("  grad : {:+12.5e}", cur_grad);
-        eprintln!("   cur : {:+12.5e}", cur);
         cur = cur.step(gamma, cur_grad);
         cur_grad = compute_grad(cur, step);
         // gamma = learning_param(last, last_grad, cur, cur_grad).max(init_learning_param);
@@ -403,17 +558,32 @@ fn grad_ascent(
         if gamma.is_nan() { gamma = init_learning_param; }
         last = cur;
         last_grad = cur_grad;
+        tau0 = 2.0 * cur.th0 / TAU / RABI_FREQ;
+        tau1 = 2.0 * cur.th1 / TAU / RABI_FREQ;
+        tau2 = 2.0 * cur.th2 / TAU / RABI_FREQ;
     }
     GradResult::NotConverged(cur)
 }
 
 fn init_scan(npoints: usize) -> (Params, f64) {
-    const MIN: f64 = PI / 8.0;
-    const MAX: f64 = 15.0 * PI / 8.0;
-    let vals: nd::Array1<f64> = nd::Array1::linspace(MIN, MAX, npoints);
+    // const MIN: f64 = PI / 8.0;
+    // const MAX: f64 = 15.0 * PI / 8.0;
+    const MIN: f64 = PI / 16.0;
+    const MAX: f64 = TAU;
+    let vals: nd::Array1<f64> =
+        nd::Array1::linspace(MIN, MAX, npoints);
+    let vals_phi: nd::Array1<f64> =
+        nd::Array1::linspace(PI / 16.0, TAU, npoints);
     let check: Vec<Params> =
-        (0..6)
-        .map(|_| vals.iter())
+        [
+            vals.iter(),
+            vals_phi.iter(),
+            vals.iter(),
+            vals_phi.iter(),
+            vals.iter(),
+            vals_phi.iter(),
+        ]
+        .into_iter()
         .multi_cartesian_product()
         .map(|p| {
             Params {
@@ -487,51 +657,54 @@ fn ad_hoc_scan(center: Params, margin: f64, npoints: usize) -> (Params, f64) {
 }
 
 fn main() {
-    // let (init, init_fid) = init_scan(7);
-
-    // let init =
-    //     Params {
-    //         th0: 1.05 * 1.740e0, ph0: 1.05 * 5.629e-1,
-    //         th1: 1.05 * 1.740e0, ph1: 1.05 * 4.915e0,
-    //         th2: 1.05 * 2.985e0, ph2: 1.05 * 3.314e0,
-    //     };
-    // let init_fid = fidelity(init).0;
-
-    // println!("{:.5e}", init);
-    // println!("{:.9}", init_fid);
-    // let step =
-    //     Params {
-    //         th0: 1e-6, ph0: 1e-6,
-    //         th1: 1e-6, ph1: 1e-6,
-    //         th2: 1e-6, ph2: 1e-6,
-    //     };
-    // let init_learning_param: f64 = 0.001;
-    // let eps: f64 = 1e-3;
-    // let maxiters: usize = 100_000_000;
-    // let params =
-    //     match grad_ascent(init, step, init_learning_param, eps, maxiters) {
-    //         GradResult::Converged(params) => {
-    //             println!("converged");
-    //             params
-    //         },
-    //         GradResult::NotConverged(params) => {
-    //             println!("not converged");
-    //             params
-    //         },
-    //     };
-
-    let ad_hoc =
-        Params {
-            th0: 1.364469853e0, ph0: 5.772125233e0,
-            th1: 4.972480000e0, ph1: 3.868397600e0,
-            th2: 3.985500533e-1, ph2: 1.439294750e0,
+    let (init, init_fid) =
+        if let Some(nscan) = NSCAN {
+            init_scan(nscan)
+        } else {
+            let init_fid = fidelity(INIT).0;
+            (INIT, init_fid)
         };
-    let (params, _) = ad_hoc_scan(ad_hoc, 0.005, 7);
+
+    println!("{:.6}", init);
+    println!("{:.6}", init_fid);
+    let step =
+        Params {
+            th0: 1e-8, ph0: 1e-8,
+            th1: 1e-8, ph1: 1e-8,
+            th2: 1e-8, ph2: 1e-8,
+        };
+    let init_learning_param: f64 = 1e-4;
+    let eps: f64 = 1e-5;
+    // let maxiters: usize = 100_000_000;
+    let params =
+        match grad_ascent(init, step, init_learning_param, eps, MAXITERS) {
+            GradResult::Converged(params) => {
+                println!("converged");
+                params
+            },
+            GradResult::NotConverged(params) => {
+                println!("not converged");
+                params
+            },
+        };
+
+    // let ad_hoc =
+    //     Params {
+    //         th0: 1.364469853e0, ph0: 5.772125233e0,
+    //         th1: 4.972480000e0, ph1: 3.868397600e0,
+    //         th2: 3.985500533e-1, ph2: 1.439294750e0,
+    //     };
+    // let (params, _) = ad_hoc_scan(ad_hoc, 0.005, 7);
 
     let uni = make_unitary(params);
     let fid = fidelity(params);
-    println!("{:.9e}", params);
+    println!("{:.6}", params);
     println!("{:+.3}", uni);
     println!("{:.6?}", fid);
+
+    let tau0: f64 = 2.0 * params.th0 / TAU / RABI_FREQ;
+    let tau1: f64 = 2.0 * params.th1 / TAU / RABI_FREQ;
+    let tau2: f64 = 2.0 * params.th2 / TAU / RABI_FREQ;
+    println!("{:.6} ms", (tau0 + tau1 + tau2) / 1000.0);
 }
 
