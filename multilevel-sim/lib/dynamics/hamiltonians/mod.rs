@@ -31,6 +31,9 @@ pub use rydberg::{ HBuilderRydberg, HRydbergParams, RydbergCoupling };
 pub mod magic_trap;
 pub use magic_trap::{ HBuilderMagicTrap, HMagicTrapParams, MotionalParams, FockCutoff };
 
+pub mod motional_rydberg;
+pub use motional_rydberg::{ HBuilderMotionalRydberg, HMotionalRydbergParams };
+
 pub mod cavity;
 pub use cavity::{ HBuilderCavity, HCavityParams };
 

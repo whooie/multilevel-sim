@@ -75,11 +75,11 @@ where S: SpinState + TrappedMagic
 impl<'a, S> HBuilderMagicTrap<'a, S>
 where S: SpinState + TrappedMagic
 {
-    const HBAR: f64 = 1.0545718001391127e-34; // J / Hz / 2π
-    const KB: f64 = 1.38064852e-23; // J / K
+    pub(crate) const HBAR: f64 = 1.0545718001391127e-34; // J / Hz / 2π
+    pub(crate) const KB: f64 = 1.38064852e-23; // J / K
 
     /// Trap frequency, in units of angular frequency, for all states.
-    const TRAP_FREQ: f64 = S::TRAP_FREQ;
+    pub(crate) const TRAP_FREQ: f64 = S::TRAP_FREQ;
 
     /// Create a new `HBuilderMagicTrap`.
     ///
@@ -116,17 +116,12 @@ where S: SpinState + TrappedMagic
             temperature,
             fock_cutoff,
         } = params;
-        let x: f64
-            = Self::HBAR * Self::TRAP_FREQ / (Self::KB * temperature);
+        let x: f64 = Self::HBAR * Self::TRAP_FREQ / (Self::KB * temperature);
         let Z: f64 = (2.0 * (x / 2.0).sinh()).recip();
         let nmax: f64
             = match fock_cutoff.unwrap_or(FockCutoff::Boltzmann(1e-6)) {
-                FockCutoff::Boltzmann(p) => {
-                    (-(Z * p).ln() / x - 0.5).ceil()
-                },
-                FockCutoff::NMax(nmax) => {
-                    nmax as f64
-                },
+                FockCutoff::Boltzmann(p) => (-(Z * p).ln() / x - 0.5).ceil(),
+                FockCutoff::NMax(nmax) => nmax as f64,
             };
         if nmax > usize::MAX as f64 {
             panic!(
@@ -359,31 +354,32 @@ where S: SpinState + TrappedMagic
     fn make_exp_ikx(&self) -> nd::Array2<C64> {
         let n_kx = self.nmax + 1;
         let mut kx_op: nd::Array2<C64> = nd::Array2::zeros((n_kx, n_kx));
+        let coeff: f64 = self.lamb_dicke;
         kx_op // a
             .slice_mut(s![..n_kx - 1, 1..n_kx])
             .diag_mut()
             .indexed_iter_mut()
             .for_each(|(n, elem)| {
-                *elem = C64::from(self.lamb_dicke * (n as f64 + 1.0).sqrt());
+                *elem = C64::from(coeff * (n as f64 + 1.0).sqrt());
             });
         kx_op // a^\dagger
             .slice_mut(s![1..n_kx, ..n_kx - 1])
             .diag_mut()
             .indexed_iter_mut()
             .for_each(|(n, elem)| {
-                *elem = C64::from(self.lamb_dicke * (n as f64 + 1.0).sqrt());
+                *elem = C64::from(coeff * (n as f64 + 1.0).sqrt());
             });
         let (evals, evects): (nd::Array1<f64>, nd::Array2<C64>)
             = kx_op.eigh_into(UPLO::Lower)
             .expect("HBuilderMagicTrap::make_exp_ikx: error diagonalizing");
-        let L = nd::Array2::from_diag(
-            &evals.mapv(|lk| C64::from_polar(1.0, lk)));
-        let V = evects;
+        let mut V = evects;
         let U = V.t().mapv(|a| a.conj());
-        // let V = evects.clone();
-        // let U = evects.inv_into()
-        //     .expect("HBuilderMagicTrap::make_exp_ikx: error inverting");
-        V.dot(&L).dot(&U)
+        V.columns_mut().into_iter().zip(evals.iter())
+            .for_each(|(mut col, eval)| {
+                let ph = C64::from_polar(1.0, *eval);
+                col.iter_mut().for_each(|v| { *v *= ph; });
+            });
+        V.dot(&U)
     }
 
     /// Compute the <i>e<sup>ikx</sup></i> (laser phase) operator over the

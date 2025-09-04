@@ -18,6 +18,7 @@ pub use hamiltonians::{
         MotionalParams,
         FockCutoff,
     },
+    motional_rydberg::{ HBuilderMotionalRydberg, HMotionalRydbergParams },
     cavity::{ HBuilderCavity, HCavityParams },
     cavity_rydberg::{ HBuilderCavityRydberg, HCavityRydbergParams },
     transverse_ising::{ HBuilderTransverseIsing, HTransverseIsingParams },

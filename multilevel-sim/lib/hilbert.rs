@@ -26,6 +26,9 @@ pub trait SpinState: BasisState {
 }
 
 /// Extends [`BasisState`] to include Rydberg properties.
+///
+/// [`Self::c6_with`] must return `Some` *if and only if* both its arguments
+/// have [`Self::is_rydberg`] return `true`.
 pub trait RydbergState: BasisState {
     /// Return `true` if `self` is a Rydberg state.
     fn is_rydberg(&self) -> bool;
@@ -33,6 +36,20 @@ pub trait RydbergState: BasisState {
     /// Return the C6 coefficient in units of angular frequency times length^6
     /// for a Rydberg interaction with another state.
     fn c6_with(&self, other: &Self) -> Option<f64>;
+}
+
+/// Alternative to [`RydbergState`], providing the entire energy (frequency)
+/// shift for a fixed atomic separation, rather than just the C6 value.
+///
+/// [`Self::shift_with`] must return `Some` *if and only if* both its arguments
+/// have [`Self::is_rydberg`] return `true`.
+pub trait RydbergShift: BasisState {
+    /// Return `true` if `self` is a Rydberg state.
+    fn is_rydberg(&self) -> bool;
+
+    /// Return the total energy shift in units of angular frequency for a
+    /// Rydberg interaction with another state.
+    fn shift_with(&self, other: &Self) -> Option<f64>;
 }
 
 /// Extends [`BasisState`] to include motional Fock state properties in a magic
